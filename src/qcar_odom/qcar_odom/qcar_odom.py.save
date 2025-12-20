@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+import sys
+sys.path.insert(0, '/home/nvidia/Core Modules/Python')  # Changed path
+
+import rclpy
+from rclpy.node import Node
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Quaternion
+from std_msgs.msg import Header
+import numpy as np
+import math
+
+# Use the SAME import as your working standalone scripts
+from Quanser.product_QCar import QCar  # Changed import
+
+
+class QCarOdometryNode(Node):
+    def __init__(self):
+        super().__init__('qcar_odometry_node')
+
+        # Initialize QCar hardware
+        try:
+            self.qcar = QCar()
+            self.get_logger().info('QCar hardware initialized successfully')
+        except Exception as e:
+            self.get_logger().error(f'Failed to initialize QCar: {str(e)}')
+            raise
+
+        # Odometry parameters
+        self.wheel_radius = 0.034  # meters
+        self.wheel_base = 0.256    # meters
+        self.encoder_counts_per_rev = 2880  # quadrature mode
+
+        # State variables
+        self.x = 0.0
+        self.y = 0.0
+run qcar_odom        self.theta = 0.0
+        self.last_encoder_count = 0
+        self.last_time = self.get_clock().now()
+
+        # Create publisher
+        self.odom_publisher = self.create_publisher(Odometry, '/odom', 10)
+
+        # Create timer (50 Hz)
+        self.timer = self.create_timer(0.02, self.timer_callback)
+
+        self.get_logger().info('QCar Odometry Node started')
+
+    def timer_callback(self):
+        try:
+            current_time = self.get_clock().now()
+
+            # Use read_write_std like your working scripts
+            mtr_cmd = np.array([0.0, 0.0])  # Don't command motion, just read
+            LEDs = np.zeros(8, dtype=int)
+            motor_current, battery_voltage, encoder_count = self.qcar.read_write_std(mtr_cmd, LEDs)
+
+            # Read IMU separately if available
+            try:
+                # For IMU, you may need to use different method - check your working code
+                angular_velocity = 0.0  # Placeholder - update based on your IMU access
+            except:
+                angular_velocity = 0.0
+
+            # Calculate delta time
+            dt = (current_time - self.last_time).nanoseconds / 1e9
+
+            if dt > 0:
+                # Calculate wheel velocity from encoder
+                delta_encoder = encoder_count - self.last_encoder_count
+                encoder_speed = delta_encoder / dt
+
+                # Convert to linear velocity
+                wheel_angular_velocity = (encoder_speed / self.encoder_counts_per_rev) * 2.0 * math.pi
+                linear_velocity = wheel_angular_velocity * self.wheel_radius
+
+                # Update pose
+                delta_s = linear_velocity * dt
+                delta_theta = angular_velocity * dt
+
+                self.theta += delta_theta
+                self.x += delta_s * math.cos(self.theta)
+                self.y += delta_s * math.sin(self.theta)
+
+                # Publish odometry
+                self.publish_odometry(current_time, linear_velocity, angular_velocity)
+
+                # Update state
+                self.last_encoder_count = encoder_count
+                self.last_time = current_time
+
+        except Exception as e:
+            self.get_logger().error(f'Error in timer callback: {str(e)}')
+
+    def publish_odometry(self, current_time, linear_vel, angular_vel):
+        """Publish Odometry message"""
+        odom_msg = Odometry()
+
+        # Header
+        odom_msg.header = Header()
+        odom_msg.header.stamp = current_time.to_msg()
+        odom_msg.header.frame_id = 'odom'
+        odom_msg.child_frame_id = 'base_link'
+
+        # Position
+        odom_msg.pose.pose.position.x = self.x
+        odom_msg.pose.pose.position.y = self.y
+        odom_msg.pose.pose.position.z = 0.0
+
+        # Orientation
+        quat = self.euler_to_quaternion(0, 0, self.theta)
+        odom_msg.pose.pose.orientation.x = quat[0]
+        odom_msg.pose.pose.orientation.y = quat[1]
+        odom_msg.pose.pose.orientation.z = quat[2]
+        odom_msg.pose.pose.orientation.w = quat[3]
+
+        # Velocity
+        odom_msg.twist.twist.linear.x = linear_vel
+        odom_msg.twist.twist.angular.z = angular_vel
+
+        # Covariance
+        odom_msg.pose.covariance = [0.0] * 36
+        odom_msg.pose.covariance[0] = 0.01
+        odom_msg.pose.covariance[7] = 0.01
+        odom_msg.pose.covariance[35] = 0.05
+
+        odom_msg.twist.covariance = [0.0] * 36
+        odom_msg.twist.covariance[0] = 0.01
+        odom_msg.twist.covariance[35] = 0.05
+
+        # Publish
+        self.odom_publisher.publish(odom_msg)
+
+    def euler_to_quaternion(self, roll, pitch, yaw):
+        """Convert Euler angles to quaternion"""
+        cy = math.cos(yaw * 0.5)
+        sy = math.sin(yaw * 0.5)
+        cp = math.cos(pitch * 0.5)
+        sp = math.sin(pitch * 0.5)
+        cr = math.cos(roll * 0.5)
+        sr = math.sin(roll * 0.5)
+
+        qx = sr * cp * cy - cr * sp * sy
+        qy = cr * sp * cy + sr * cp * sy
+        qz = cr * cp * sy - sr * sp * cy
+        qw = cr * cp * cy + sr * sp * sy
+
+        return [qx, qy, qz, qw]
+
+    def destroy_node(self):
+        """Clean up"""
+        try:
+            self.qcar.terminate()
+            self.get_logger().info('QCar hardware terminated')
+        except Exception as e:
+            self.get_logger().error(f'Error terminating QCar: {str(e)}')
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = None
+    try:
+        node = QCarOdometryNode()
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        print('\nShutdown requested by user')
+    except Exception as e:
+        print(f'Error: {str(e)}')
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+

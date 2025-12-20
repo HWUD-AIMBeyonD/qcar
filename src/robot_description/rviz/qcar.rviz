@@ -1,0 +1,179 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 78
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Status1
+        - /Image2
+      Splitter Ratio: 0.5
+    Tree Height: 286
+
+  - Class: rviz_common/Selection
+    Name: Selection
+
+  - Class: rviz_common/ToolProperties
+    Expanded:
+      - /2D Pose Estimate1
+      - /2D Nav Goal1
+      - /Publish Point1
+    Name: Tool Properties
+    Splitter Ratio: 0.5886790156364441
+
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+
+  - Class: rviz_common/Time
+    Experimental: false
+    Name: Time
+    SyncMode: 0
+    SyncSource: Intel RealSense
+
+Preferences:
+  PromptSaveOnExit: true
+
+Toolbars:
+  toolButtonStyle: 2
+
+Visualization Manager:
+  Class: ""
+  Enabled: true
+  Name: root
+
+  Global Options:
+    Background Color: 48; 48; 48
+    Default Light: true
+    Fixed Frame: base
+    Frame Rate: 30
+
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.03
+        Value: Lines
+      Name: Grid
+      Plane: XY
+      Plane Cell Count: 10
+      Reference Frame: <Fixed Frame>
+      Value: true
+
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Image Topic: /qcar/csi_front/image_raw
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Front Camera
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Value: true
+
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Image Topic: /camera/color/image_raw
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Intel RealSense
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Value: true
+
+    - Class: rviz_default_plugins/PointCloud2
+      Alpha: 1
+      Autocompute Intensity Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Name: PointCloud2
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (m): 0.01
+      Style: Flat Squares
+      Topic: /camera/depth/color/points
+      Use Fixed Frame: true
+      Value: true
+
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Image Topic: /vision/lanes/detections
+      Name: Lane Fill
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Value: true
+
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Image Topic: /detections_image_topic
+      Name: Detections Image
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Value: true
+
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Image Topic: /vision/lanes/detections_top
+      Name: Lane Top
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Value: true
+
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+    - Class: rviz_default_plugins/SetInitialPose
+      Topic: /initialpose
+      Theta std deviation: 0.26
+      X std deviation: 0.5
+      Y std deviation: 0.5
+    - Class: rviz_default_plugins/SetGoal
+      Topic: /move_base_simple/goal
+    - Class: rviz_default_plugins/PublishPoint
+      Single click: true
+      Topic: /clicked_point
+
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 10.37
+      Field of View: 0.785
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Name: Current View
+      Near Clip Distance: 0.01
+      Pitch: 1.57
+      Target Frame: <Fixed Frame>
+      Yaw: 3.54
+
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 1016
+  Hide Left Dock: false
+  Hide Right Dock: true
+  Width: 2488
+  X: 72
+  Y: 27
+
