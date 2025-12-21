@@ -13,7 +13,7 @@
 
   <!-- ====================== INCLUDES ====================== -->
   <xacro:include filename="$(find realsense2_description)/urdf/_d435.urdf.xacro" />
-  
+
 
   <!-- ====================== BASE LINK ====================== -->
   <link name="base">
@@ -36,6 +36,27 @@
       <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
     </inertial>
   </link>
+
+  <!-- ====================== BASE FOOTPRINT ====================== -->
+  <!-- 2D navigation frame (no roll/pitch). Kept coincident with base for Nav2/SLAM -->
+  <link name="base_footprint"/>
+
+  <joint name="base_to_base_footprint" type="fixed">
+    <parent link="base"/>
+    <child link="base_footprint"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ====================== BASE_LINK (Nav2 compatibility) ====================== -->
+  <!-- Keep 'base' as the real robot base, but also provide 'base_link' as an alias
+       because many Nav2 components default to base_link. -->
+  <link name="base_link"/>
+
+  <joint name="base_to_base_link" type="fixed">
+    <parent link="base"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
 
   <!-- ====================== LIDAR ====================== -->
   <link name="lidar">
@@ -253,7 +274,7 @@
     <child link="camera_rgb"/>
     <origin xyz="0.081686 0 0.15445" rpy="0 0 0"/>
   </joint>
-  
+
 
   <joint name="camera_csi_front_joint" type="fixed">
     <parent link="base"/>
@@ -355,4 +376,3 @@
     </sensor>
   </gazebo>
 </robot>
-

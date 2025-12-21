@@ -15,10 +15,10 @@ if [ -f ~/qcar_ws/install/robot_description/share/robot_description/launch/simpl
 fi
 
 # --- Option 2: Publish base -> base_footprint as a static transform (NO sudo) ---
-echo "Publishing static TF: base -> base_footprint ..."
-ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 base base_footprint &
-BASE_FOOTPRINT_PID=$!
-sleep 1
+#echo "Publishing static TF: base -> base_footprint ..."
+#ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 base base_footprint &
+#BASE_FOOTPRINT_PID=$!
+#sleep 1
 
 # Start hardware interface WITH sudo (needs hardware access)
 echo "Starting unified hardware interface..."

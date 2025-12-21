@@ -9,11 +9,25 @@ setup(
     version='0.0.0',
     packages=[package_name],
     data_files=[
+        # ament index + package manifest
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        # Install launch files
+
+        # Install launch files (match your existing naming: *.launch.py)
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+
+        # Install config files (Nav2 + SLAM params)
+        (os.path.join('share', package_name, 'config'), glob('config/*')),
+
+        # Install RViz configs
+        (os.path.join('share', package_name, 'rviz'), glob('rviz/*')),
+
+        # Install behavior trees (optional, but standard for Nav2)
+        (os.path.join('share', package_name, 'behavior_trees'), glob('behavior_trees/*')),
+
+        # Install scripts (helper bash scripts)
+        (os.path.join('share', package_name, 'scripts'), glob('scripts/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -28,4 +42,3 @@ setup(
         ],
     },
 )
-
