@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import os
 
 from launch import LaunchDescription
@@ -45,12 +46,27 @@ def generate_launch_description():
         parameters=[params_file, {'use_sim_time': use_sim_time}],
     )
 
+    world_model = Node(
+         package='nav2_world_model',
+         node_executable='world_model',
+         node_name='world_model',
+         output='screen',
+        parameters=[
+            params_file,
+            {'use_sim_time': use_sim_time},
+            # These topics exist in your graph already:
+            {'costmap_topic': '/global_costmap/costmap_raw'},
+            {'footprint_topic': '/global_costmap/published_footprint'},
+        ],
+    )
+
     planner_server = Node(
         package='nav2_navfn_planner',
         node_executable='navfn_planner',
-        node_name='planner_server',
+        node_name='navfn_planner',
         output='screen',
         parameters=[params_file, {'use_sim_time': use_sim_time}],
+        remappings=[('get_costmap', '/GetCostmap')],
     )
 
     controller_server = Node(
@@ -90,7 +106,8 @@ def generate_launch_description():
                 'node_names': [
                     'global_costmap/costmap',
                     'local_costmap/costmap',
-                    'planner_server',
+                    'world_model',
+                    'navfn_planner',
                     'controller_server',
                     'recoveries_server',
                     'bt_navigator',
@@ -104,6 +121,7 @@ def generate_launch_description():
         declare_use_sim_time,
         global_costmap,
         local_costmap,
+        world_model,
         planner_server,
         controller_server,
         recoveries_server,
