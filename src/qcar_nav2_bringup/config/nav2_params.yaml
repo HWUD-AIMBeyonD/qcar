@@ -7,6 +7,8 @@ bt_navigator:
     bt_loop_duration: 10
     default_server_timeout: 20
 
+    # FIX: point to your BT XML
+    bt_xml_filename: /home/nvidia/qcar_ws/src/qcar_nav2_bringup/config/bt_navigation.xml
 controller_server:
   ros__parameters:
     use_sim_time: false
@@ -14,66 +16,90 @@ controller_server:
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.0
     min_theta_velocity_threshold: 0.001
-    failure_tolerance: 0.3
-
-    controller_plugins:
-      - FollowPath
-
-    FollowPath:
-      plugin: dwb_core::DWBLocalPlanner
-      global_frame_id: odom
-      robot_base_frame_id: base
-
-      sim_time: 1.2
-      vx_samples: 10
-      vtheta_samples: 20
-      linear_granularity: 0.02
-      angular_granularity: 0.02
-
-      max_vel_x: 0.10
-      min_vel_x: 0.00
-      max_vel_y: 0.0
-      min_vel_y: 0.0
-      max_vel_theta: 0.30
-      min_vel_theta: -0.30
-
-      acc_lim_x: 0.50
-      acc_lim_y: 0.0
-      acc_lim_theta: 1.00
-
-      critics:
-        - RotateToGoal
-        - Oscillation
-        - BaseObstacle
-        - GoalAlign
-        - PathAlign
-        - PathDist
-        - GoalDist
-
-      RotateToGoal:
-        scale: 2.0
-        slowing_factor: 5.0
-        lookahead_time: 1.0
-
-      Oscillation:
-        scale: 1.0
-
-      BaseObstacle:
-        scale: 0.02
-
-      GoalAlign:
-        scale: 1.0
-        forward_point_distance: 0.10
-
-      PathAlign:
-        scale: 1.0
-        forward_point_distance: 0.10
-
-      PathDist:
-        scale: 32.0
-
-      GoalDist:
-        scale: 24.0
+    transform_tolerance: 0.3
+    
+    # Use simple standard trajectory generator (no accel limits issues)
+    trajectory_generator_name: dwb_plugins::StandardTrajectoryGenerator
+    
+    # Simulation parameters
+    sim_time: 1.5
+    vx_samples: 20
+    vy_samples: 1
+    vtheta_samples: 20
+    discretize_by_time: false
+    
+    # Velocity limits
+    max_vel_x: 0.25
+    min_vel_x: 0.0
+    max_vel_y: 0.0
+    min_vel_y: 0.0
+    max_vel_theta: 0.8
+    min_speed_xy: 0.05
+    max_speed_xy: 0.25
+    min_speed_theta: 0.1
+    
+    # Acceleration limits
+    acc_lim_x: 0.5
+    acc_lim_y: 0.0
+    acc_lim_theta: 1.0
+    decel_lim_x: -0.5
+    decel_lim_y: 0.0
+    decel_lim_theta: -1.0
+    
+    # Goal tolerances
+    xy_goal_tolerance: 0.10
+    yaw_goal_tolerance: 0.20
+    
+    # Path pruning
+    prune_plan: true
+    prune_distance: 1.0
+    
+    # Publishing
+    publish_evaluation: false
+    publish_global_plan: true
+    publish_local_plan: true
+    publish_trajectories: true
+    publish_transformed_plan: true
+    publish_cost_grid_pc: false
+    debug_trajectory_details: false
+    
+    # Goal checker
+    goal_checker_name: dwb_plugins::SimpleGoalChecker
+    
+    # Legacy DWA bias params (keep for compatibility)
+    path_distance_bias: 32.0
+    goal_distance_bias: 24.0
+    occdist_scale: 0.02
+    
+    # Obstacle footprint scaling
+    max_scaling_factor: 0.2
+    scaling_speed: 0.25
+    
+    # Critics list
+    critics: ["RotateToGoal", "Oscillation", "ObstacleFootprint", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+    
+    # Critic scales
+    ObstacleFootprint.scale: 0.02
+    ObstacleFootprint.sum_scores: false
+    ObstacleFootprint.max_scaling_factor: 0.2
+    ObstacleFootprint.scaling_speed: 0.25
+    
+    PathAlign.scale: 32.0
+    PathAlign.aggregation_type: last
+    
+    GoalAlign.scale: 24.0
+    GoalAlign.aggregation_type: last
+    
+    PathDist.scale: 32.0
+    PathDist.aggregation_type: sum
+    
+    GoalDist.scale: 24.0
+    GoalDist.aggregation_type: sum
+    
+    RotateToGoal.scale: 32.0
+    
+    Oscillation.scale: 1.0
+    Oscillation.x_only_threshold: 0.05
 
 navfn_planner:
   ros__parameters:
@@ -85,8 +111,11 @@ navfn_planner:
 recoveries_server:
   ros__parameters:
     use_sim_time: false
-    costmap_topic: local_costmap/costmap_raw
-    footprint_topic: local_costmap/published_footprint
+
+    # FIX: make these absolute (more robust)
+    costmap_topic: /local_costmap/costmap_raw
+    footprint_topic: /local_costmap/published_footprint
+
     cycle_frequency: 5.0
 
     recovery_plugins:
@@ -113,14 +142,16 @@ lifecycle_manager:
   ros__parameters:
     use_sim_time: false
     autostart: true
+
+    # FIX: use fully-qualified node names (leading /)
     node_names:
-      - global_costmap/costmap
-      - local_costmap/costmap
-      - world_model
-      - navfn_planner
-      - controller_server
-      - recoveries_server
-      - bt_navigator
+      - /global_costmap/costmap
+      - /local_costmap/costmap
+      - /world_model
+      - /navfn_planner
+      - /controller_server
+      - /recoveries_server
+      - /bt_navigator
 
 # ---- Global costmap ----
 global_costmap:
