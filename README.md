@@ -1,10 +1,13 @@
 # QCar ROS 2 Workspace: Bringup, TF, SLAM, and Nav2 (ROS 2 Dashing)
 
 This repository contains a ROS 2 (Dashing) bringup workflow for the **Quanser QCar** with:
-- Reliable hardware access (Quanser Core Modules)
-- Correct TF tree and RViz visualization
-- Online SLAM using `slam_toolbox`
-- Online navigation using **Nav2** (planner + costmaps + DWB controller)
+
+* Reliable hardware access (Quanser Core Modules)
+* Correct TF tree and RViz visualization
+* Online SLAM using `slam_toolbox`
+* **Custom Navigation Architecture:**
+  * **Regulated Pure Pursuit Controller (RPP)**: Backported modern controller logic running in a custom standalone server.
+  * Legacy support for **DWB Controller** (configurable).
 
 > This is designed for research/education on real hardware. Nav2 will command the vehicle when a goal is set.
 
@@ -13,14 +16,16 @@ This repository contains a ROS 2 (Dashing) bringup workflow for the **Quanser QC
 ## Requirements
 
 ### Hardware
-- Quanser QCar
-- RPLiDAR (or compatible 2D LiDAR)
+
+* Quanser QCar
+* RPLiDAR (or compatible 2D LiDAR)
 
 ### Software
-- Ubuntu (tested on NVIDIA Jetson–based environment)
-- ROS 2 Dashing Diademata
-- `slam_toolbox` (binary installation on Dashing)
-- Nav2 packages (Dashing)
+
+* Ubuntu (tested on NVIDIA Jetson–based environment)
+* ROS 2 Dashing Diademata
+* `slam_toolbox` (binary installation on Dashing)
+* Nav2 packages (Dashing)
 
 > **Note:** Quanser proprietary libraries are required to run this stack but are not distributed in this repository. You must obtain and install them separately according to Quanser's licensing terms.
 
@@ -31,13 +36,10 @@ This repository contains a ROS 2 (Dashing) bringup workflow for the **Quanser QC
 The ROS 2 nodes in this repo wrap Quanser's QCar Python Core Modules. These modules are not included here, but the nodes expect them to be installed on the target system (for example under `/home/nvidia/Core Modules/Python`).
 
 Core modules used by the nodes:
-- **`product_QCar.py`**: Low-level QCar hardware I/O (motors, LEDs, encoder, battery/current).
-- **`q_essential.py`**: LIDAR and camera helpers (e.g., RPLIDAR, RealSense).
-- **`q_control.py`**, **`q_dp.py`**, **`q_interpretation.py`**, **`q_misc.py`**, **`q_ui.py`**: Control, decision/planning, perception helpers, utilities, and gamepad support.
 
-Common extension points:
-- Add speed limiting / smoothing on `/cmd_vel`
-- Add a perception node (lane/obstacles) publishing custom topics for future planners/controllers
+* **`product_QCar.py`**: Low-level QCar hardware I/O (motors, LEDs, encoder, battery/current).
+* **`q_essential.py`**: LIDAR and camera helpers (e.g., RPLIDAR, RealSense).
+* **`q_control.py`**, **`q_dp.py`**, **`q_interpretation.py`**, **`q_misc.py`**, **`q_ui.py`**: Control, decision/planning, perception helpers, utilities, and gamepad support.
 
 ---
 
@@ -55,6 +57,8 @@ cd ~/qcar_ws
 colcon build --symlink-install
 source install/setup.bash
 ```
+
+*Note: This now builds both `qcar_nav2_bringup` and the new `rpp_controller` package.*
 
 ### 3. Install SLAM + Nav2 (if not already installed)
 ```bash
@@ -78,21 +82,27 @@ sudo apt install \
 
 ## Repository Layout
 
-Key files (kept inside `qcar_nav2_bringup` as a single bringup package):
+Key packages and files:
 
-* `qcar_nav2_bringup/`
+* **`rpp_controller/` (NEW)**
+  * Source code for the **Custom Controller Server**.
+  * Contains the backported Regulated Pure Pursuit algorithm and the action server implementation that replaces the standard Dashing `dwb_controller`.
+
+* **`qcar_nav2_bringup/`**
   * `qcar_hardware_interface.py` — publishes `/scan`, `/pointcloud`, `/odom`, TF; subscribes `/cmd_vel`
-* `launch/`
-  * `qcar_bringup.launch.py` — hardware + robot_description (optional)
-  * `slam_launch.launch.py` — SLAM Toolbox online bringup (async)
-  * `nav2_online.launch.py` — Nav2 online bringup (planner + costmaps + DWB)
-* `config/`
-  * `slam_toolbox_online.yaml` — slam_toolbox params
-  * `nav2_params.yaml` — Nav2 params (frames, costmaps, DWB tuning)
+  * `launch/`
+    * `qcar_bringup.launch.py` — hardware + robot_description (optional)
+    * `slam_launch.launch.py` — SLAM Toolbox online bringup (async)
+    * `nav2_online.launch.py` — **Nav2 bringup**. Configured to switch between Custom RPP (Active) and Legacy DWB (Commented).
+  * `config/`
+    * `slam_toolbox_online.yaml` — slam_toolbox params
+    * `nav2_params.yaml` — **Hybrid Param File**. Contains two sections:
+      * **Option A:** RPP Controller + Nested Local Costmap (Active)
+      * **Option B:** Legacy DWB Controller + Standalone Local Costmap (Commented out)
 
 ---
 
-## Quick Start Summary 
+## Quick Start Summary
 
 ### 1) Bring up the robot (drivers + RViz + TF)
 ```bash
@@ -101,6 +111,7 @@ bash run_qcar_bringup.sh
 ```
 
 This should start:
+
 * `robot_state_publisher` + RViz (non-sudo)
 * `qcar_hardware_interface` (sudo, single point of hardware access)
 
@@ -119,77 +130,62 @@ ros2 launch qcar_nav2_bringup nav2_online.launch.py
 ```
 
 ### Expected outcome
-* Hardware publishes `/scan` and `/odom`, plus TF `odom → base`
-* SLAM publishes `/map` and TF `map → odom`
-* Nav2 creates global + local costmaps and publishes `/cmd_vel` when a goal is set in RViz
+
+* Hardware publishes `/scan` and `/odom`.
+* SLAM publishes `/map`.
+* **Nav2 Controller**:
+  * Launches `rpp_controller_server`.
+  * Creates a Local Costmap on topic `/costmap` (internal to the controller).
+  * Publishes `/cmd_vel` when a goal is set in RViz.
+
+> **Tip:** If the robot moves too slowly or stalls, check `min_x_velocity_threshold` and `desired_linear_vel` in `nav2_params.yaml` (Option A). QCar static friction requires higher minimum speeds (~0.6 m/s) to start moving.
 
 ---
 
 ## TF Frames (Critical)
 
 This stack expects a single connected TF tree:
+
 * `map → odom` (published by `slam_toolbox`)
 * `odom → base` (published by `qcar_hardware_interface`)
 * `base → lidar` (published by URDF / robot_state_publisher)
 * `base → base_footprint` (published by URDF / robot_state_publisher)
 * `base → base_link` (published by URDF / robot_state_publisher)
 
-### Base frame naming
-
-* **Primary robot base frame:** `base` (used by URDF + odometry)
-* **Nav2 compatibility frames:** `base_link` and `base_footprint` (both children of `base`, coincident)
-
-All three frames (`base`, `base_link`, `base_footprint`) are at the same location via fixed joints in the URDF. This ensures compatibility with:
-- SLAM Toolbox (expects `base_footprint`)
-- Nav2 components (may default to `base_link`)
-- Your existing system (built around `base`)
-
 ### Verifying TF tree
-
-Check that all frames are connected:
 ```bash
-# Check complete chain from map to lidar
-ros2 run tf2_ros tf2_echo map lidar
-
-# Verify individual links
 ros2 run tf2_ros tf2_echo map odom      # SLAM
 ros2 run tf2_ros tf2_echo odom base     # Odometry
-ros2 run tf2_ros tf2_echo base lidar    # URDF (static)
-ros2 run tf2_ros tf2_echo base base_link         # URDF (static)
-ros2 run tf2_ros tf2_echo base base_footprint    # URDF (static)
 ```
 
-> **Note:** Dashing may print warnings like `LOOPING due to no latching` for static transforms — this is expected behavior and does not affect functionality.
 ---
 
 ## System Architecture
 
-### Split-permission setup (intentional)
+### 1. Split-permission setup (intentional)
+
 * **Hardware-touching node runs with sudo.** Quanser HIL requires privileged access.
-* **URDF + RViz runs as normal user.** RViz often breaks under sudo due to display/X11 permissions.
+* **URDF + RViz runs as normal user.**
 
-### Unified hardware interface node (single point of hardware access)
-* **Package:** `qcar_nav2_bringup`
+### 2. Custom Navigation Architecture (RPP vs DWB)
+
+We have implemented a **Custom Controller Server** to bypass limitations in ROS 2 Dashing's `nav2_dwb_controller`.
+
+* **Option A (Active): Regulated Pure Pursuit**
+  * Runs inside `rpp_controller_server`.
+  * This custom node manages its own internal **Local Costmap** instance.
+  * It handles path-following using pure pursuit geometry, which is smoother and more robust for car-like robots than the default DWB.
+  * **Note:** This node is *not* managed by the Nav2 Lifecycle Manager (it auto-starts).
+
+* **Option B (Legacy): DWB Controller**
+  * Uses standard `nav2_costmap_2d` (standalone node) + `dwb_controller`.
+  * Available as a fallback by commenting/uncommenting sections in `nav2_online.launch.py` and `nav2_params.yaml`.
+
+### 3. Unified hardware interface node
+
 * **Node:** `qcar_hardware_interface` (runs with sudo)
-
-**Publishes:**
-* `/scan` (`sensor_msgs/LaserScan`)
-* `/pointcloud` (`sensor_msgs/PointCloud`)
-* `/odom` (`nav_msgs/Odometry`)
-* TF: `odom → base` (dynamic)
-
-**Subscribes:**
-* `/cmd_vel` (`geometry_msgs/Twist`)
-
-**Why this matters:** only one node should initialize the QCar HIL card. Running multiple hardware nodes commonly causes:
-* "GPIO is in use by another application"
-* invalid card handle / HIL initialization errors
-
-### Visualization components (no sudo)
-* **Package:** `robot_description`
-* **Runs:**
-  * `robot_state_publisher` (URDF → TF)
-  * `RViz2` (visualization)
+* **Publishes:** `/scan`, `/pointcloud`, `/odom`, TF `odom → base`
+* **Subscribes:** `/cmd_vel`
 
 ---
 

@@ -1,0 +1,7 @@
+<library path="rpp_controller">
+  <class type="rpp_controller::RegulatedPurePursuitController" base_class_type="nav2_core::Controller">
+    <description>
+      Regulated Pure Pursuit controller plugin for Ackermann vehicles
+    </description>
+  </class>
+</library>
