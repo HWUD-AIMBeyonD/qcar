@@ -1,31 +1,53 @@
 #!/bin/bash
-# QCar Mapping Mode: Bringup + SLAM + Teleop
-# Use this to drive around and create a map
+# QCar Mapping Mode: Bringup + SLAM + Custom Teleop
 
 source /opt/ros/dashing/setup.bash
 source ~/qcar_ws/install/setup.bash
+
+# --- CLEANUP FUNCTION (Runs only on exit) ---
+function cleanup_hardware {
+    echo "  -> Force-resetting QCar Hardware (Motors + LiDAR)..."
+    sudo -E PYTHONPATH=$PYTHONPATH LD_LIBRARY_PATH=$LD_LIBRARY_PATH bash -c 'python3 -c "
+import sys
+sys.path.insert(0, \"/home/nvidia/Core Modules/Python\")
+sys.path.insert(0, \"/home/nvidia/Core Modules/Python/Quanser\")
+
+# 1. Reset Car (Motors)
+try:
+    from Quanser.product_QCar import QCar
+    car = QCar()
+    car.terminate()
+    print(\"     [+] Motors stopped.\")
+except Exception as e:
+    print(f\"     [-] Car reset failed: {e}\")
+
+# 2. Reset LiDAR
+try:
+    try:
+        from pal.utilities.lidar import Lidar
+    except:
+        from hal.utilities.lidar import Lidar
+    lidar = Lidar()
+    lidar.terminate()
+    print(\"     [+] LiDAR stopped.\")
+except Exception as e:
+    print(f\"     [-] LiDAR reset failed: {e}\")
+"'
+}
 
 echo "=========================================="
 echo "Starting QCar MAPPING System..."
 echo "=========================================="
 
-# Clean up any existing hardware interface instances
-echo "Checking for existing hardware interfaces..."
-sudo pkill -f qcar_hardware_interface 2>/dev/null
-sudo pkill -f cmd_vel_to_qcar 2>/dev/null
-sleep 2
-echo "✓ Cleanup complete"
-echo ""
-
-# Start robot_description WITHOUT sudo (doesn't need hardware access)
+# 1. Start robot_description
 if [ -f ~/qcar_ws/install/robot_description/share/robot_description/launch/simple_robot_launch.py ]; then
-    echo "✓ Starting robot_description (with RViz2)..."
+    echo "✓ Starting robot_description..."
     ros2 launch robot_description simple_robot_launch.py &
     RVIZ_PID=$!
     sleep 3
 fi
 
-# Start hardware interface WITH sudo (needs hardware access)
+# 2. Start Unified Hardware Interface
 echo "✓ Starting unified hardware interface..."
 sudo -E PYTHONPATH=$PYTHONPATH LD_LIBRARY_PATH=$LD_LIBRARY_PATH DISPLAY=$DISPLAY bash -c '
     source /opt/ros/dashing/setup.bash
@@ -35,48 +57,28 @@ sudo -E PYTHONPATH=$PYTHONPATH LD_LIBRARY_PATH=$LD_LIBRARY_PATH DISPLAY=$DISPLAY
 HARDWARE_PID=$!
 sleep 2
 
-# Start SLAM Toolbox
-echo "✓ Starting slam_toolbox (online mapping)..."
+# 3. Start SLAM Toolbox
+echo "✓ Starting slam_toolbox..."
 ros2 launch qcar_nav2_bringup slam_launch.launch.py &
 SLAM_PID=$!
 sleep 3
 
-# Start Teleop for manual driving
-echo "✓ Starting teleop control..."
-sudo -E PYTHONPATH=$PYTHONPATH LD_LIBRARY_PATH=$LD_LIBRARY_PATH bash -c '
-    source /opt/ros/dashing/setup.bash
-    source ~/qcar_ws/install/setup.bash
-    python3 ~/qcar_ws/install/qcar_teleop/lib/qcar_teleop/cmd_vel_to_qcar --ros-args -p max_speed:=0.5 -p max_steering_angle:=0.5
-' &
-TELEOP_PID=$!
+# 4. Start YOUR Custom Teleop Node (WASD)
+#echo "✓ Starting Manual Teleop (WASD)..."
+#gnome-terminal --title="QCar Teleop" -- bash -c "source /opt/ros/dashing/setup.bash; source ~/qcar_ws/install/setup.bash; ros2 run qcar_teleop manual_teleop; exec bash" &
 
-echo "=========================================="
-echo "QCar MAPPING System Running!"
-echo "=========================================="
-echo "Active components:"
-echo "  ✓ robot_description (URDF, TF)"
-echo "  ✓ RViz2 visualization"
-echo "  ✓ qcar_hardware_interface (LiDAR, odom, cmd_vel)"
-echo "  ✓ slam_toolbox (building map)"
-echo "  ✓ teleop control (keyboard/gamepad)"
-echo "=========================================="
-echo ""
-echo "INSTRUCTIONS:"
-echo "1. Use your teleop controls to drive around"
-echo "2. Watch the map build in RViz"
-echo "3. When done mapping, run: ./save_map.sh"
-echo "4. Then Ctrl+C to stop this script"
-echo ""
-echo "Press Ctrl+C to stop all nodes."
-echo "=========================================="
+#echo "=========================================="
+#echo "QCar Mapping System Running!"
+#echo "Check the 'QCar Teleop' terminal window to drive."
+#echo "=========================================="
 
-# Wait for processes and handle cleanup
-trap "echo '';
-      echo 'Stopping all nodes...';
-      kill $RVIZ_PID $HARDWARE_PID $SLAM_PID $TELEOP_PID 2>/dev/null;
-      sudo pkill -f qcar_hardware_interface;
-      sudo pkill -f cmd_vel_to_qcar;
-      echo 'Done. Remember to save your map if you haven'\''t yet!';
+# Wait for processes
+# CLEANUP runs here on exit
+trap "echo ''; echo 'Stopping...'; 
+      kill $RVIZ_PID $HARDWARE_PID $SLAM_PID; 
+      sudo pkill -f qcar_hardware_interface; 
+      sleep 1;
+      cleanup_hardware; 
       exit" INT TERM
 
 wait

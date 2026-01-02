@@ -24,6 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'cmd_vel_to_qcar = qcar_teleop.cmd_vel_to_qcar:main',
+            'manual_teleop = qcar_teleop.manual_teleop:main',
         ],
     },
 )

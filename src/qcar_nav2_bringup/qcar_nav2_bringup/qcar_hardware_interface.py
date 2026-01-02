@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import sys
+#
 sys.path.insert(0, '/home/nvidia/Core Modules/Python')
 sys.path.insert(0, '/home/nvidia/Core Modules/Python/Quanser')
 
@@ -7,7 +8,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan, PointCloud
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Twist, Point32, Quaternion
+from geometry_msgs.msg import Twist, Point32
 from std_msgs.msg import Header
 import numpy as np
 import math
@@ -16,6 +17,7 @@ from tf2_msgs.msg import TFMessage
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 # Import QCar hardware
+#
 from Quanser.product_QCar import QCar
 
 # Import LIDAR
@@ -41,7 +43,7 @@ class QCarHardwareInterface(Node):
 
         # Initialize QCar hardware ONCE
         try:
-            self.qcar = QCar()
+            self.qcar = QCar() #
             self.get_logger().info('✓ QCar hardware initialized')
         except Exception as e:
             self.get_logger().error(f'Failed to initialize QCar: {str(e)}')
@@ -59,8 +61,6 @@ class QCarHardwareInterface(Node):
         # -----------------------------
         # TF publishers (DUAL QoS)
         # -----------------------------
-        # Some nodes subscribe to /tf as BEST_EFFORT, others as RELIABLE.
-        # To avoid QoS mismatches on Dashing, publish odom->base on /tf with both.
         tf_qos_reliable = QoSProfile(
             reliability=QoSReliabilityPolicy.RELIABLE,
             history=QoSHistoryPolicy.KEEP_LAST,
@@ -76,7 +76,7 @@ class QCarHardwareInterface(Node):
         self.tf_publisher_reliable = self.create_publisher(TFMessage, '/tf', tf_qos_reliable)
         self.tf_publisher_best_effort = self.create_publisher(TFMessage, '/tf', tf_qos_best_effort)
 
-        # Other publishers (keep as you had)
+        # Other publishers
         self.scan_publisher = self.create_publisher(LaserScan, '/scan', 10)
         self.pointcloud_publisher = self.create_publisher(PointCloud, '/pointcloud', 10)
         self.odom_publisher = self.create_publisher(Odometry, '/odom', 10)
@@ -89,9 +89,11 @@ class QCarHardwareInterface(Node):
             10
         )
 
-        # Odometry state
-        self.wheel_radius = 0.034  # meters
-        self.wheel_base = 0.256    # meters (distance between front and rear axles)
+        # ----------------------------------------
+        # UPDATED: Hardware Constants & States
+        # ----------------------------------------
+        self.wheel_radius = 0.033  # meters (Updated from 0.034 per Manual Table 11)
+        self.wheel_base = 0.256    # meters
         self.encoder_counts_per_rev = 2880  # quadrature
         self.x = 0.0
         self.y = 0.0
@@ -101,25 +103,28 @@ class QCarHardwareInterface(Node):
 
         # Motor command state
         self.current_throttle = 0.0
-        self.current_steering = 0.0  # This is our normalized steering command [-1, 1]
+        
+        # Steering Logic with Lag
+        self.target_steering = 0.0   # The desired steering from cmd_vel (radians)
+        self.current_steering = 0.0  # The actual filtered steering sent to motors (radians)
+        self.steering_tau = 0.16     # Filter Time Constant (0.16s)
+        
         self.last_cmd_time = self.get_clock().now()
         self.cmd_timeout = rclpy.duration.Duration(seconds=1.0)
 
-        # Steering angle mapping (empirical calibration)
         # QCar max physical steering angle is approximately ±30 degrees (±0.5236 rad)
-        # Your steering command range is [-0.5, 0.5] which maps to this
-        self.max_physical_steering_angle = 0.5236  # radians (30 degrees)
+        # The QCar API saturates at 0.5 rad
+        self.max_physical_steering_angle = 0.5236 
         
         # Computed angular velocity (for odometry feedback)
         self.computed_angular_velocity = 0.0
 
-        # Main control loop (50 Hz)
+        # Main control loop (50 Hz -> dt = 0.02s)
         self.timer = self.create_timer(0.02, self.control_loop)
 
         self.get_logger().info('✓ QCar Hardware Interface ready (Nav2-compatible odometry)')
-        self.get_logger().info('  Publishing: /scan, /pointcloud, /odom, /tf (dual QoS)')
-        self.get_logger().info('  Subscribing: /cmd_vel')
-        self.get_logger().info(f'  Wheel base: {self.wheel_base}m, Max steering: {self.max_physical_steering_angle}rad')
+        self.get_logger().info(f'  Wheel Radius: {self.wheel_radius}m (Updated)')
+        self.get_logger().info(f'  Steering: Direct Radians + 0.16s Lag Filter')
 
     def cmd_vel_callback(self, msg):
         self.last_cmd_time = self.get_clock().now()
@@ -128,30 +133,43 @@ class QCarHardwareInterface(Node):
         angular_vel = msg.angular.z
 
         # Throttle command (simple scaling)
+        # Note: product_QCar saturates internally at +/- 0.2
         self.current_throttle = np.clip(linear_vel / self.max_speed * 0.2, -0.2, 0.2)
 
-        # Steering command: convert desired yaw rate to steering angle
-        # Using inverse bicycle model: δ = atan((L * ω) / v)
-        steering_angle = self.compute_steering_from_angular_velocity(linear_vel, angular_vel)
+        # ----------------------------------------
+        # UPDATED: Direct Radian Calculation
+        # ----------------------------------------
+        # 1. Compute required steering angle (radians) from bicycle model
+        steering_angle_rad = self.compute_steering_from_angular_velocity(linear_vel, angular_vel)
         
-        # Convert physical steering angle to command range [-0.5, 0.5]
-        self.current_steering = np.clip(
-            (steering_angle / self.max_physical_steering_angle) * 0.5,
-            -0.5, 
-            0.5
-        )
+        # 2. Clip to hardware limits (0.5 rad is QCar API limit)
+        # We do NOT normalize to [-0.5, 0.5] anymore. We send radians.
+        self.target_steering = np.clip(steering_angle_rad, -0.5, 0.5)
 
     def control_loop(self):
         try:
             current_time = self.get_clock().now()
+            dt = 0.02 # Fixed timer period
 
             time_since_cmd = current_time - self.last_cmd_time
             if time_since_cmd > self.cmd_timeout:
                 self.current_throttle = 0.0
-                self.current_steering = 0.0
+                self.target_steering = 0.0
 
+            # ----------------------------------------
+            # UPDATED: Steering Lag Filter (First Order)
+            # ----------------------------------------
+            # y[n] = alpha * x[n] + (1 - alpha) * y[n-1]
+            # alpha = dt / (tau + dt)
+            alpha = dt / (self.steering_tau + dt)
+            
+            self.current_steering = (alpha * self.target_steering) + ((1.0 - alpha) * self.current_steering)
+
+            # Send to Hardware (Direct Radians)
             mtr_cmd = np.array([self.current_throttle, self.current_steering])
             LEDs = np.zeros(8, dtype=int)
+            
+            # read_write_std returns (current, voltage, encoder_counts)
             motor_current, battery_voltage, encoder_count = self.qcar.read_write_std(mtr_cmd, LEDs)
 
             # Update odom + publish TF first
@@ -171,30 +189,13 @@ class QCarHardwareInterface(Node):
 
     def compute_steering_from_angular_velocity(self, linear_velocity, desired_angular_velocity):
         """
-        Convert desired angular velocity to required steering angle.
-        
-        Inverse bicycle model: δ = atan((L * ω) / v)
-        where:
-          v = linear velocity (m/s)
-          L = wheelbase (m)
-          ω = desired angular velocity (rad/s)
-          δ = required steering angle (radians)
-        
-        Args:
-            linear_velocity: Current/desired linear speed in m/s
-            desired_angular_velocity: Desired yaw rate in rad/s (from /cmd_vel)
-        
-        Returns:
-            steering_angle: Required steering angle in radians
+        Convert desired angular velocity to required steering angle (Radians).
         """
         # Handle stationary rotation or very slow speeds
         if abs(linear_velocity) < 0.05:
-            # At very low speeds, can't compute steering from bicycle model
-            # Use direct mapping as fallback (pure rotation not possible for car)
-            # Clamp to max steering
             if abs(desired_angular_velocity) > 0.01:
-                # Return max steering in direction of rotation
-                return np.sign(desired_angular_velocity) * self.max_physical_steering_angle * 0.5
+                # Return max steering in direction of rotation (Radians)
+                return np.sign(desired_angular_velocity) * 0.5
             else:
                 return 0.0
         
@@ -202,53 +203,26 @@ class QCarHardwareInterface(Node):
         # δ = atan((L * ω) / v)
         try:
             steering_angle = math.atan((self.wheel_base * desired_angular_velocity) / linear_velocity)
-            
-            # Clamp to physical limits
-            steering_angle = np.clip(steering_angle, 
-                                    -self.max_physical_steering_angle, 
-                                     self.max_physical_steering_angle)
-            
             return steering_angle
         except:
             return 0.0
 
-    def compute_angular_velocity_from_steering(self, linear_velocity, steering_command):
+    def compute_angular_velocity_from_steering(self, linear_velocity, steering_command_rad):
         """
         Compute angular velocity using bicycle/Ackermann steering model.
-        
-        Bicycle model: ω = (v / L) * tan(δ)
-        where:
-          v = linear velocity (m/s)
-          L = wheelbase (m)
-          δ = steering angle (radians)
-          ω = angular velocity (rad/s)
-        
         Args:
-            linear_velocity: Current linear speed in m/s
-            steering_command: Normalized steering [-0.5, 0.5] from motor commands
-        
-        Returns:
-            angular_velocity: Computed yaw rate in rad/s
+            steering_command_rad: Steering angle in RADIANS
         """
-        # Map steering command to physical steering angle
-        # steering_command range: [-0.5, 0.5]
-        # physical angle range: [-0.5236, 0.5236] rad (±30 degrees)
-        steering_angle_rad = (steering_command / 0.5) * self.max_physical_steering_angle
-        
         # Prevent division by zero and handle small velocities
         if abs(linear_velocity) < 0.001:
             return 0.0
         
         # Bicycle model: ω = (v / L) * tan(δ)
         try:
-            angular_velocity = (linear_velocity / self.wheel_base) * math.tan(steering_angle_rad)
-            
-            # Sanity check: limit to reasonable values (±2 rad/s ~ ±115 deg/s)
-            angular_velocity = np.clip(angular_velocity, -2.0, 2.0)
-            
-            return angular_velocity
+            angular_velocity = (linear_velocity / self.wheel_base) * math.tan(steering_command_rad)
+            # Sanity check limit
+            return np.clip(angular_velocity, -4.0, 4.0)
         except:
-            # In case of any math errors, return 0
             return 0.0
 
     def update_odometry(self, current_time, encoder_count):
@@ -264,9 +238,10 @@ class QCarHardwareInterface(Node):
         linear_velocity = wheel_angular_velocity * self.wheel_radius
 
         # Compute angular velocity from steering using bicycle model
+        # Pass the FILTERED current steering (in radians)
         angular_velocity = self.compute_angular_velocity_from_steering(
             linear_velocity, 
-            self.current_steering
+            self.current_steering 
         )
         
         # Store for feedback
@@ -303,7 +278,6 @@ class QCarHardwareInterface(Node):
 
         if ranges.size > 0 and np.nanmax(ranges) > 50.0:
             ranges = ranges / 1000.0
-            self.get_logger().info('Detected lidar in mm, converting to meters', once=True)
 
         ranges = np.where(
             (~np.isfinite(ranges)) |
@@ -372,25 +346,22 @@ class QCarHardwareInterface(Node):
         odom_msg.pose.pose.orientation.z = quat[2]
         odom_msg.pose.pose.orientation.w = quat[3]
 
-        # CRITICAL FOR NAV2: Publish actual computed velocities
         odom_msg.twist.twist.linear.x = linear_vel
         odom_msg.twist.twist.linear.y = 0.0
         odom_msg.twist.twist.linear.z = 0.0
         odom_msg.twist.twist.angular.x = 0.0
         odom_msg.twist.twist.angular.y = 0.0
-        odom_msg.twist.twist.angular.z = angular_vel  # NOW NON-ZERO when turning!
+        odom_msg.twist.twist.angular.z = angular_vel
 
-        # Covariance matrices (tune these based on your robot's accuracy)
-        # Pose covariance (6x6, row-major: x, y, z, roll, pitch, yaw)
+        # Covariance matrices
         odom_msg.pose.covariance = [0.0] * 36
-        odom_msg.pose.covariance[0] = 0.01   # x variance (m^2)
-        odom_msg.pose.covariance[7] = 0.01   # y variance (m^2)
-        odom_msg.pose.covariance[35] = 0.05  # yaw variance (rad^2)
+        odom_msg.pose.covariance[0] = 0.01   # x variance
+        odom_msg.pose.covariance[7] = 0.01   # y variance
+        odom_msg.pose.covariance[35] = 0.05  # yaw variance
 
-        # Twist covariance (6x6, row-major: vx, vy, vz, vroll, vpitch, vyaw)
         odom_msg.twist.covariance = [0.0] * 36
-        odom_msg.twist.covariance[0] = 0.01   # linear x variance
-        odom_msg.twist.covariance[35] = 0.05  # angular z variance
+        odom_msg.twist.covariance[0] = 0.01   # linear x
+        odom_msg.twist.covariance[35] = 0.05  # angular z
 
         self.odom_publisher.publish(odom_msg)
 
@@ -427,7 +398,6 @@ class QCarHardwareInterface(Node):
         msg = TFMessage()
         msg.transforms = [t]
 
-        # Publish to both QoS variants
         self.tf_publisher_reliable.publish(msg)
         self.tf_publisher_best_effort.publish(msg)
 
