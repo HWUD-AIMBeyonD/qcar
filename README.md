@@ -58,7 +58,6 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-*Note: This now builds both `qcar_nav2_bringup` and the new `rpp_controller` package.*
 
 ### 3. Install SLAM + Nav2 (if not already installed)
 ```bash
@@ -75,7 +74,9 @@ sudo apt install \
   ros-dashing-nav2-dwb-controller \
   ros-dashing-nav2-bt-navigator \
   ros-dashing-nav2-lifecycle-manager \
-  ros-dashing-nav2-recoveries
+  ros-dashing-nav2-recoveries \
+  ros-dashing-nav2-map-server \
+  ros-dashing-nav2-amcl
 ```
 
 ---
@@ -84,7 +85,7 @@ sudo apt install \
 
 Key packages and files:
 
-* **`rpp_controller/` (NEW)**
+* **`rpp_controller/`**
   * Source code for the **Custom Controller Server**.
   * Contains the backported Regulated Pure Pursuit algorithm and the action server implementation that replaces the standard Dashing `dwb_controller`.
 
@@ -93,46 +94,86 @@ Key packages and files:
   * `launch/`
     * `qcar_bringup.launch.py` — hardware + robot_description (optional)
     * `slam_launch.launch.py` — SLAM Toolbox online bringup (async)
-    * `nav2_online.launch.py` — **Nav2 bringup**. Configured to switch between Custom RPP (Active) and Legacy DWB (Commented).
+    * `localization.launch.py` — **Localization Mode**: Runs Map Server + AMCL (Requires saved map).
+    * `nav2_online.launch.py` — **Nav2 bringup**. Configured to switch between Custom RPP and Legacy DWB.
   * `config/`
     * `slam_toolbox_online.yaml` — slam_toolbox params
     * `nav2_params.yaml` — **Hybrid Param File**. Contains two sections:
-      * **Option A:** RPP Controller + Nested Local Costmap (Active)
-      * **Option B:** Legacy DWB Controller + Standalone Local Costmap (Commented out)
+      * **Option A:** RPP Controller + Nested Local Costmap 
+      * **Option B:** Legacy DWB Controller + Standalone Local Costmap 
 
 ---
 
 ## Quick Start Summary
 
-### 1) Bring up the robot (drivers + RViz + TF)
+You can choose between **Mapping (SLAM)** or **Map-Based Navigation**.
+
+### Workflow A: Mapping (SLAM)
+
+*Use this to create a new map.*
+
+1. **Bring up the robot**
 ```bash
 cd ~/qcar_ws
 bash run_qcar_bringup.sh
 ```
 
-This should start:
-
-* `robot_state_publisher` + RViz (non-sudo)
-* `qcar_hardware_interface` (sudo, single point of hardware access)
-
-### 2) Start SLAM (in another terminal)
+2. **Start SLAM** (in another terminal)
 ```bash
 source /opt/ros/dashing/setup.bash
 source ~/qcar_ws/install/setup.bash
 ros2 launch qcar_nav2_bringup slam_launch.launch.py
 ```
 
-### 3) Start Nav2 (in another terminal)
+3. **Save Map**
+When finished, save the map using `nav2_map_server`.
+
+---
+
+### Workflow B: Map-Based Navigation
+
+*Use this to drive autonomously on a saved map.*
+
+1. **Bring up the robot**
 ```bash
-source /opt/ros/dashing/setup.bash
+cd ~/qcar_ws
+bash run_qcar_bringup.sh
+```
+
+2. **Start Localization** (Map Server + AMCL)
+```bash
+source ~/qcar_ws/install/setup.bash
+ros2 launch qcar_nav2_bringup localization.launch.py map:=/home/nvidia/qcar_ws/maps/latest_map.yaml
+```
+
+3. **Start Nav2** (Planner + Controller)
+```bash
 source ~/qcar_ws/install/setup.bash
 ros2 launch qcar_nav2_bringup nav2_online.launch.py
 ```
 
+4. **Set Initial Pose**
+AMCL requires an initial pose estimate. You can do this via RViz ("2D Pose Estimate") or via terminal:
+```bash
+ros2 topic pub --once /initialpose geometry_msgs/msg/PoseWithCovarianceStamped "{header: {frame_id: 'map'}, pose: {pose: {position: {x: 0.0, y: 0.0, z: 0.0}, orientation: {z: 0.0, w: 1.0}}}}"
+```
+
+5. **Send a Goal**
+**Option 1: Using RViz**
+Use the **"2D Nav Goal"** tool in RViz to click and drag a destination on the map.
+
+**Option 2: Using Terminal**
+Send the robot to specific coordinates (e.g., x=1.0 meters, y=0.0 meters).
+```bash
+ros2 action send_goal /NavigateToPose nav2_msgs/action/NavigateToPose "{pose: {header: {frame_id: 'map'}, pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {z: 0.0, w: 1.0}}}}"
+```
+
+---
+
 ### Expected outcome
 
 * Hardware publishes `/scan` and `/odom`.
-* SLAM publishes `/map`.
+* SLAM/Map Server publishes `/map`.
 * **Nav2 Controller**:
   * Launches `rpp_controller_server`.
   * Creates a Local Costmap on topic `/costmap` (internal to the controller).
@@ -169,9 +210,9 @@ ros2 run tf2_ros tf2_echo odom base     # Odometry
 
 ### 2. Custom Navigation Architecture (RPP vs DWB)
 
-We have implemented a **Custom Controller Server** to bypass limitations in ROS 2 Dashing's `nav2_dwb_controller`.
+A **Custom Controller Server** has been implemented to bypass limitations in ROS 2 Dashing's `nav2_dwb_controller`.
 
-* **Option A (Active): Regulated Pure Pursuit**
+* **Regulated Pure Pursuit**
   * Runs inside `rpp_controller_server`.
   * This custom node manages its own internal **Local Costmap** instance.
   * It handles path-following using pure pursuit geometry, which is smoother and more robust for car-like robots than the default DWB.
