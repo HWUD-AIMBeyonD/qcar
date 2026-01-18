@@ -32,7 +32,6 @@ public:
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
         // 2. Setup Global Costmap Object
-        // We pass the namespace specifically for Dashing compatibility
         costmap_ros_ = std::make_shared<nav2_costmap_2d::Costmap2DROS>(
             "global_costmap", std::string(get_namespace()));
 
@@ -44,12 +43,18 @@ public:
         RCLCPP_INFO(get_logger(), "Configuring Lifecycle Components...");
         
         // 4. Manually trigger costmap lifecycle to allocate memory/plugins
-        // In Dashing, this must happen before the planner tries to look at the map
         costmap_ros_->on_configure(rclcpp_lifecycle::State());
         costmap_ros_->on_activate(rclcpp_lifecycle::State());
 
+        // ⭐ FIX: Spin costmap in a separate thread (CRITICAL!)
+        // This allows the costmap to receive /map messages and update
+        costmap_thread_ = std::thread([this]() {
+            rclcpp::executors::SingleThreadedExecutor exec;
+            exec.add_node(costmap_ros_->get_node_base_interface());
+            exec.spin();
+        });
+
         // 5. Configure the Planner Logic
-        // We use shared_from_this() now that the node is inside an executor
         planner_->configure(shared_from_this(), "GridBased", tf_buffer_, costmap_ros_);
         planner_->activate();
 
@@ -68,6 +73,17 @@ public:
         RCLCPP_INFO(get_logger(), "Hybrid Planner Server Fully Ready!");
     }
 
+    ~HybridPlannerServer() {
+        // ⭐ FIX: Cleanup costmap thread on shutdown
+        if (planner_) {
+            planner_->deactivate();
+            planner_->cleanup();
+        }
+        if (costmap_thread_.joinable()) {
+            costmap_thread_.join();
+        }
+    }
+
 private:
     rclcpp_action::GoalResponse handle_goal(
         const rclcpp_action::GoalUUID &, std::shared_ptr<const Action::Goal>)
@@ -82,7 +98,6 @@ private:
 
     void handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
     {
-        // Execute in a detached thread to prevent blocking the executor's thread pool
         std::thread{std::bind(&HybridPlannerServer::execute, this, _1), goal_handle}.detach();
     }
 
@@ -133,6 +148,7 @@ private:
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
+    std::thread costmap_thread_;  // ⭐ FIX: Added this member variable
     std::shared_ptr<custom_hybrid_planner::HybridPlanner> planner_;
     typename rclcpp_action::Server<Action>::SharedPtr action_server_;
 };
@@ -141,18 +157,13 @@ int main(int argc, char ** argv)
 {
     rclcpp::init(argc, argv);
     
-    // Create the node instance
     auto node = std::make_shared<HybridPlannerServer>();
     
-    // Using MultiThreadedExecutor to handle costmap updates and Action calls simultaneously
-    // This matches the architecture of the working RPP controller fix
-    rclcpp::executors::MultiThreadedExecutor executor;
-    executor.add_node(node);
-    
-    // Setup logic must happen after node creation but before/during spinning
+    // Setup logic must happen after node creation
     node->setup();
     
-    executor.spin();
+    // Spin the main node (action server handles planning requests)
+    rclcpp::spin(node);
     
     rclcpp::shutdown();
     return 0;

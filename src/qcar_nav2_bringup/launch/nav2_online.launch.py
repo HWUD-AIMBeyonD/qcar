@@ -81,9 +81,9 @@ def generate_launch_description():
             {'use_sim_time': use_sim_time},
             {'autostart': True},
             {'node_names': [
+		'/bt_navigator',
                 '/world_model',
-                '/recoveries_server',
-                '/bt_navigator'
+                '/recoveries_server'
             ]},
         ],
     )
