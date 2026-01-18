@@ -1,0 +1,7 @@
+<library path="custom_hybrid_planner">
+  <class type="custom_hybrid_planner::HybridPlanner" base_class_type="nav2_core::GlobalPlanner">
+    <description>
+      A simplified kinematic hybrid planner for Ackermann vehicles.
+    </description>
+  </class>
+</library>
