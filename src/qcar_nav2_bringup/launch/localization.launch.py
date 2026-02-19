@@ -7,17 +7,16 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
+
 def generate_launch_description():
     pkg_share = get_package_share_directory('qcar_nav2_bringup')
 
-    map_file = LaunchConfiguration('map')
     use_sim_time = LaunchConfiguration('use_sim_time')
-    params_file = LaunchConfiguration('params_file')
 
-    declare_map = DeclareLaunchArgument(
-        'map',
-        default_value=os.path.join(pkg_share, 'maps', 'map.yaml'),
-        description='Full path to map file to load'
+    # Hardcoded map file
+    default_map_path = os.path.join(
+        os.environ.get('HOME', '/home/nvidia'),
+        'qcar_ws', 'maps', 'qcar_map_20260205_064547.yaml'
     )
 
     declare_use_sim_time = DeclareLaunchArgument(
@@ -26,48 +25,44 @@ def generate_launch_description():
         description='Use simulation (Gazebo) clock if true'
     )
 
-    declare_params = DeclareLaunchArgument(
-        'params_file',
-        default_value=os.path.join(pkg_share, 'config', 'nav2_params.yaml'),
-        description='Full path to Nav2 parameters file'
-    )
-
-    # 1. Map Server
-    map_server = Node(
-        package='nav2_map_server',
-        node_executable='map_server',
+    # 1. Direct Map Publisher - bypasses nav2_map_server lifecycle issues
+    direct_map_publisher = Node(
+        package='qcar_nav2_bringup',
+        node_executable='direct_map_publisher',
         node_name='map_server',
         output='screen',
-        parameters=[{'yaml_filename': map_file}, {'use_sim_time': use_sim_time}]
+        parameters=[{
+            'yaml_filename': default_map_path,
+            'frame_id': 'map'
+        }]
     )
 
-    # 2. AMCL
+    # 2. Custom AMCL - our own implementation, no lifecycle manager needed
     amcl = Node(
-        package='nav2_amcl',
-        node_executable='amcl',
+        package='qcar_amcl',
+        node_executable='amcl_node',
         node_name='amcl',
         output='screen',
-        parameters=[params_file, {'use_sim_time': use_sim_time}]
+        parameters=[{
+            'use_sim_time': False,
+            'base_frame_id': 'base',
+            'odom_frame_id': 'odom',
+            'global_frame_id': 'map',
+            'min_particles': 100,
+            'max_particles': 500,
+            'max_beams': 30,
+            'laser_likelihood_max_dist': 2.0,
+            'tf_broadcast': True,
+            'update_min_d': 0.1,
+            'update_min_a': 0.2,
+        }]
     )
 
-    # 3. Lifecycle Manager (Localizes ONLY)
-    lifecycle_manager = Node(
-        package='nav2_lifecycle_manager',
-        node_executable='lifecycle_manager',
-        node_name='lifecycle_manager_localization',
-        output='screen',
-        parameters=[
-            {'use_sim_time': use_sim_time},
-            {'autostart': True},
-            {'node_names': ['map_server', 'amcl']}
-        ]
-    )
+    # No lifecycle manager needed - both nodes are regular nodes now
 
     return LaunchDescription([
-        declare_map,
         declare_use_sim_time,
-        declare_params,
-        map_server,
+        direct_map_publisher,
         amcl,
-        lifecycle_manager
     ])
+

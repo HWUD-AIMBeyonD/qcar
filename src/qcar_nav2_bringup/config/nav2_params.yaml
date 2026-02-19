@@ -1,5 +1,5 @@
 # ==============================================================================
-# AMCL (Localization)
+# AMCL (Localization) - Dashing compatible
 # ==============================================================================
 amcl:
   ros__parameters:
@@ -10,19 +10,14 @@ amcl:
     alpha4: 0.1
     base_frame_id: "base"
     global_frame_id: "map"
-    map_topic: "/map"
-    qos_map:
-      reliability: "reliable"
-      durability: "transient_local"
-      depth: 1
+    odom_frame_id: "odom"
     laser_likelihood_max_dist: 2.0
     max_beams: 60
     max_particles: 1000
     min_particles: 500
-    odom_frame_id: "odom"
     pf_err: 0.05
     pf_z: 0.99
-    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    robot_model_type: "differential"
     save_pose_rate: 0.5
     tf_broadcast: true
     z_hit: 0.5
@@ -228,3 +223,4 @@ lifecycle_manager:
       - /navfn_planner
       - /recoveries_server
       - /bt_navigator
+

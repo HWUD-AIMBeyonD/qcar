@@ -1,9 +1,9 @@
-# Minimal slam_toolbox config for ROS2 Dashing
-# Based on default mapper_params_online_async.yaml
+# QCar Optimized slam_toolbox config for ROS2 Dashing
+# Tailored for RPLiDAR A2, Jetson TX2, and indoor track mapping
 
 slam_toolbox:
   ros__parameters:
-    # Solver Params
+    # Solver Params (Optimized for Jetson TX2 CPU)
     solver_plugin: solver_plugins::CeresSolver
     ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
     ceres_preconditioner: SCHUR_JACOBI
@@ -17,25 +17,27 @@ slam_toolbox:
     base_frame: base_footprint
     scan_topic: /scan
     mode: mapping
-    
-    # Real robot (not simulation)
     use_sim_time: false
     
     # TF publishing
     transform_publish_period: 0.02
     
-    # Scan processing
+    # Scan processing (ADDED to match RPLiDAR A2 specs)
     throttle_scans: 1
+    resolution: 0.05        # [MODIFIED] 5cm grid size. Crucial for 30cm track.
+    max_laser_range: 12.0   # [ADDED] Hardware max for RPLiDAR A2
     
-    # Range limits (match your RPLiDAR A2)
-    minimum_travel_distance: 0.2
-    minimum_travel_heading: 0.2
+    # Range limits and Update Triggers
+    minimum_travel_distance: 0.3    # [MODIFIED] from 0.2
+    minimum_travel_heading: 0.3     # [MODIFIED] from 0.2
     scan_buffer_size: 10
     scan_buffer_maximum_scan_distance: 10.0
     link_match_minimum_response_fine: 0.1
-    link_scan_maximum_distance: 1.5
-    loop_search_maximum_distance: 3.0
+    link_scan_maximum_distance: 10.0    # [MAJOR FIX] increased from 1.5
+    
+    # Loop Closure (Track Loop Recognition)
     do_loop_closing: true
+    loop_search_maximum_distance: 8.0   # [MODIFIED] increased from 3.0
     loop_match_minimum_chain_size: 10
     loop_match_maximum_variance_coarse: 3.0
     loop_match_minimum_response_coarse: 0.35

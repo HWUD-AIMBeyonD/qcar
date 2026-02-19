@@ -51,22 +51,30 @@ sudo -E PYTHONPATH=$PYTHONPATH LD_LIBRARY_PATH=$LD_LIBRARY_PATH DISPLAY=$DISPLAY
     python3 ~/qcar_ws/install/qcar_nav2_bringup/lib/qcar_nav2_bringup/qcar_hardware_interface --ros-args -p max_speed:=0.5 -p max_steering_angle:=0.5
 ' &
 HARDWARE_PID=$!
+sleep 2
+
+# 3. Simple EKF (Sensor Fusion)
+echo "Starting simple EKF (sensor fusion)..."
+ros2 launch qcar_odom sensor_fusion.launch.py &
+FUSION_PID=$!
 
 echo "========================================"
 echo "QCar System Running!"
 echo "Nodes active:"
 echo "  ✓ robot_description (URDF, TF)"
 echo "  ✓ RViz2 visualization"
-echo "  ✓ qcar_hardware_interface (LiDAR, odom, cmd_vel)"
+echo "  ✓ qcar_hardware_interface (LiDAR, odom_raw, imu, cmd_vel)"
+echo "  ✓ simple_ekf (fuses odom_raw + imu -> /odometry/filtered, /path_fused)"
 echo "========================================"
 echo "Press Ctrl+C to stop all nodes."
 
 # Wait for Ctrl+C
 trap "echo ''; echo 'Stopping...';
-      kill $RVIZ_PID $HARDWARE_PID 2>/dev/null;
+      kill $RVIZ_PID $HARDWARE_PID $FUSION_PID 2>/dev/null;
       sudo pkill -f qcar_hardware_interface;
+      sudo pkill -f simple_ekf;
       sleep 1;
-      cleanup_hardware; 
+      cleanup_hardware;
       exit" INT TERM
 
 wait

@@ -13,6 +13,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        (os.path.join('share', package_name, 'config'), glob('config/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,6 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'odom_node = qcar_odom.qcar_odom:main',
+            'path_comparison_node = qcar_odom.path_comparison:main',
+            'simple_ekf = qcar_odom.simple_ekf:main',
         ],
     },
 )

@@ -42,8 +42,9 @@ echo "Files created:"
 echo "  • ${MAP_NAME}.pgm"
 echo "  • ${MAP_NAME}.yaml"
 echo ""
-echo "Updating symlink..."
-ln -sf ${MAP_NAME}.yaml latest_map.yaml
-ln -sf ${MAP_NAME}.pgm latest_map.pgm
-echo "  • latest_map.yaml -> ${MAP_NAME}.yaml"
+# echo "Updating symlink..."
+# ln -sf ${MAP_NAME}.yaml latest_map.yaml
+# ln -sf ${MAP_NAME}.pgm latest_map.pgm
+# echo "  • latest_map.yaml -> ${MAP_NAME}.yaml"
 echo "=========================================="
+
