@@ -17,8 +17,13 @@ MOVING:
  a   d
    s
 
+REVERSE STEERING:
+ q       e
+  \\     /
+   reverse
+
 x : Force Stop
-q : Quit
+z : Quit
 
 CTRL-C to quit
 """
@@ -77,10 +82,16 @@ def main(args=None):
             elif key == 'd':
                 linear_speed = MAX_LINEAR_SPEED * 0.5
                 angular_speed = -MAX_ANGULAR_SPEED
+            elif key == 'q':
+                linear_speed = -MAX_LINEAR_SPEED * 0.5
+                angular_speed = MAX_ANGULAR_SPEED
+            elif key == 'e':
+                linear_speed = -MAX_LINEAR_SPEED * 0.5
+                angular_speed = -MAX_ANGULAR_SPEED
             elif key == 'x':
                 linear_speed = 0.0
                 angular_speed = 0.0
-            elif key == 'q' or key == '\x03':
+            elif key == 'z' or key == '\x03':
                 break
             else:
                 linear_speed = 0.0
@@ -100,3 +111,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
