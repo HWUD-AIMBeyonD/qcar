@@ -91,7 +91,7 @@
 <joint name="body_lidar_joint" type="fixed">
 <parent link="base"/>
 <child link="lidar"/>
-<origin xyz="-0.0108 0.0 0.1696" rpy="0 0 1.5708"/>
+<origin xyz="-0.0108 0.0 0.1696" rpy="0 0 1.54"/>
 <axis xyz="0 0 1"/>
 </joint>
 <link name="hubfl">

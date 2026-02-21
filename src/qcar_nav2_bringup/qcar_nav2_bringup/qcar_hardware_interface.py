@@ -117,6 +117,9 @@ class QCarHardwareInterface(Node):
         # Main control loop (50 Hz -> dt = 0.02s)
         self.timer = self.create_timer(0.02, self.control_loop)
 
+        # LIDAR loop (10 Hz - matches RPLiDAR A2 hardware rotation)
+        self.lidar_timer = self.create_timer(0.1, self.lidar_loop)
+
         self.get_logger().info('✓ QCar Hardware Interface ready')
         self.get_logger().info('  /odom_raw - Wheel encoder odometry')
         self.get_logger().info('  /imu - IMU data')
@@ -157,46 +160,44 @@ class QCarHardwareInterface(Node):
 
             # --- Read IMU Data (with workaround for Core Modules bug) ---
             try:
-                # Call read_IMU to populate the buffer
                 self.qcar.read_IMU()
-
-                # Extract data directly from buffer (bypassing buggy return)
-                gyro = self.qcar.read_other_buffer_IMU[0:3]   # Channels 3000-3002
-                accel = self.qcar.read_other_buffer_IMU[3:6]  # Channels 4000-4002
-
+                gyro = self.qcar.read_other_buffer_IMU[0:3]
+                accel = self.qcar.read_other_buffer_IMU[3:6]
                 self.publish_imu(current_time, gyro, accel)
             except Exception as e:
-                # Occasional read errors shouldn't kill the node
                 pass
 
-            # Update odom + publish TF
+            # Update odom + publish
             self.update_odometry(current_time, encoder_count)
-
-            # Then lidar
-            if self.lidar is not None:
-                try:
-                    self.lidar.read()
-                    self.publish_laserscan(current_time)
-                    self.publish_pointcloud(current_time)
-                except Exception as e:
-                    self.get_logger().error(f'LIDAR read error: {str(e)}', throttle_duration_sec=5.0)
 
         except Exception as e:
             self.get_logger().error(f'Control loop error: {str(e)}')
 
+    def lidar_loop(self):
+        """Read and publish LIDAR at 10Hz (matches RPLiDAR A2 rotation rate)."""
+        if self.lidar is not None:
+            try:
+                self.lidar.read()
+                n = np.array(self.lidar.distances).flatten().size
+                # Only publish if we got a reasonably full scan
+                if n > 200:
+                    current_time = self.get_clock().now()
+                    self.publish_laserscan(current_time)
+                    self.publish_pointcloud(current_time)
+            except Exception as e:
+                self.get_logger().error(f'LIDAR error: {e}', throttle_duration_sec=5.0)
+
     def publish_imu(self, current_time, gyro, accel):
         imu_msg = Imu()
         imu_msg.header.stamp = current_time.to_msg()
-        imu_msg.header.frame_id = 'imu_link' # Matches URDF
+        imu_msg.header.frame_id = 'imu_link'
 
-        # Orientation: Unknown (Covariance -1). Cartographer will use Gyro instead.
         imu_msg.orientation.x = 0.0
         imu_msg.orientation.y = 0.0
         imu_msg.orientation.z = 0.0
         imu_msg.orientation.w = 1.0
         imu_msg.orientation_covariance[0] = -1
 
-        # Angular Velocity (Gyro) - rad/s
         imu_msg.angular_velocity.x = float(gyro[0])
         imu_msg.angular_velocity.y = float(gyro[1])
         imu_msg.angular_velocity.z = float(gyro[2])
@@ -204,7 +205,6 @@ class QCarHardwareInterface(Node):
         imu_msg.angular_velocity_covariance[4] = 0.01
         imu_msg.angular_velocity_covariance[8] = 0.01
 
-        # Linear Acceleration (Accel) - m/s^2
         imu_msg.linear_acceleration.x = float(accel[0])
         imu_msg.linear_acceleration.y = float(accel[1])
         imu_msg.linear_acceleration.z = float(accel[2])
@@ -262,9 +262,6 @@ class QCarHardwareInterface(Node):
         self.x += delta_s * math.cos(self.theta)
         self.y += delta_s * math.sin(self.theta)
 
-        # TF odom -> base is published by simple_ekf node
-        # self.publish_tf(current_time)
-
         self.publish_odometry(current_time, linear_velocity, angular_velocity)
 
         self.last_encoder_count = encoder_count
@@ -284,30 +281,51 @@ class QCarHardwareInterface(Node):
         if ranges.size > 0 and np.nanmax(ranges) > 50.0:
             ranges = ranges / 1000.0
 
-        ranges = np.where(
-            (~np.isfinite(ranges)) |
-            (ranges < scan_msg.range_min) |
-            (ranges > scan_msg.range_max),
-            np.inf,
-            ranges
-        )
-
         angles = np.array(self.lidar.angles).flatten().astype(np.float32)
 
         n = int(ranges.size)
         if n <= 1 or angles.size != n:
             return
-        
-        scan_msg.angle_min = float(angles[-1])
-        scan_msg.angle_max = float(angles[0])
-        scan_msg.angle_increment = float((angles[0] - angles[-1]) / (n - 1))
+
+        # Negate angles (same convention as pointcloud)
+        neg_angles = -angles
+
+        # Create uniform angle grid
+        a_min = float(np.min(neg_angles))
+        a_max = float(np.max(neg_angles))
+        uniform_angles = np.linspace(a_min, a_max, n)
+
+        # Resample ranges onto uniform grid via interpolation
+        # Sort by angle first (required for np.interp)
+        sort_idx = np.argsort(neg_angles)
+        sorted_angles = neg_angles[sort_idx]
+        sorted_ranges = ranges[sort_idx]
+
+        # Only interpolate valid (finite) ranges
+        valid = np.isfinite(sorted_ranges)
+        if np.sum(valid) < 10:
+            return
+
+        uniform_ranges = np.interp(uniform_angles, sorted_angles[valid], sorted_ranges[valid])
+
+        # Re-apply range filtering
+        uniform_ranges = np.where(
+            (uniform_ranges < scan_msg.range_min) |
+            (uniform_ranges > scan_msg.range_max),
+            np.inf,
+            uniform_ranges
+        )
+
+        scan_msg.angle_min = a_min
+        scan_msg.angle_max = a_max
+        scan_msg.angle_increment = float((a_max - a_min) / (n - 1))
         scan_msg.time_increment = 0.0
-        scan_msg.scan_time = 0.033
-        scan_msg.ranges = ranges.tolist()
+        scan_msg.scan_time = 0.1
+        scan_msg.ranges = uniform_ranges.tolist()
         scan_msg.intensities = []
 
         self.scan_publisher.publish(scan_msg)
-
+        
     def publish_pointcloud(self, current_time):
         pc_msg = PointCloud()
         pc_msg.header = Header()
@@ -328,8 +346,8 @@ class QCarHardwareInterface(Node):
             if not np.isfinite(r) or r < 0.15 or r > 12.0:
                 continue
             pt = Point32()
-            pt.x = float(r * math.cos(float(a)))
-            pt.y = float(r * math.sin(float(a)))
+            pt.x = float(r * math.cos(float(-a)))
+            pt.y = float(r * math.sin(float(-a)))
             pt.z = 0.0
             points.append(pt)
 
@@ -343,7 +361,6 @@ class QCarHardwareInterface(Node):
         odom_msg.header.frame_id = 'odom'
         odom_msg.child_frame_id = 'base'
 
-        # Provide position (from encoder integration)
         odom_msg.pose.pose.position.x = self.x
         odom_msg.pose.pose.position.y = self.y
         odom_msg.pose.pose.position.z = 0.0
@@ -354,7 +371,6 @@ class QCarHardwareInterface(Node):
         odom_msg.pose.pose.orientation.z = quat[2]
         odom_msg.pose.pose.orientation.w = quat[3]
 
-        # Provide velocity
         odom_msg.twist.twist.linear.x = linear_vel
         odom_msg.twist.twist.linear.y = 0.0
         odom_msg.twist.twist.linear.z = 0.0
@@ -362,15 +378,14 @@ class QCarHardwareInterface(Node):
         odom_msg.twist.twist.angular.y = 0.0
         odom_msg.twist.twist.angular.z = angular_vel
 
-        # Covariance - trust x,y but NOT yaw (IMU is better for yaw)
         odom_msg.pose.covariance = [0.0] * 36
-        odom_msg.pose.covariance[0] = 0.1    # x
-        odom_msg.pose.covariance[7] = 0.1    # y
-        odom_msg.pose.covariance[35] = 1.0   # yaw - higher = less trust
+        odom_msg.pose.covariance[0] = 0.1
+        odom_msg.pose.covariance[7] = 0.1
+        odom_msg.pose.covariance[35] = 1.0
 
         odom_msg.twist.covariance = [0.0] * 36
-        odom_msg.twist.covariance[0] = 0.1    # vx
-        odom_msg.twist.covariance[35] = 1.0   # vyaw - higher = less trust
+        odom_msg.twist.covariance[0] = 0.1
+        odom_msg.twist.covariance[35] = 1.0
 
         self.odom_publisher.publish(odom_msg)
 
@@ -446,4 +461,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-

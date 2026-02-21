@@ -64,6 +64,10 @@ if [ -f ~/qcar_ws/install/robot_description/share/robot_description/launch/simpl
     done
     echo ""
 fi
+# 3. Simple EKF (Sensor Fusion)
+echo "Starting simple EKF (sensor fusion)..."
+ros2 launch qcar_odom sensor_fusion.launch.py &
+FUSION_PID=$!
 
 # 3. Start SLAM Toolbox
 echo "✓ Starting slam_toolbox..."

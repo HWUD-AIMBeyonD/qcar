@@ -33,7 +33,7 @@ MAP_BUILDER.num_background_threads = 4
 
 -- 2D Trajectory Builder
 TRAJECTORY_BUILDER_2D.min_range = 0.10
-TRAJECTORY_BUILDER_2D.max_range = 3.5
+TRAJECTORY_BUILDER_2D.max_range = 10.0
 TRAJECTORY_BUILDER_2D.missing_data_ray_length = 3.0
 TRAJECTORY_BUILDER_2D.use_imu_data = false
 
