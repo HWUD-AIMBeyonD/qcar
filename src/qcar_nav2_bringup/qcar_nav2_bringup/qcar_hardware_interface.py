@@ -78,7 +78,8 @@ class QCarHardwareInterface(Node):
         # Other publishers
         self.scan_publisher = self.create_publisher(LaserScan, '/scan', 10)
         self.pointcloud_publisher = self.create_publisher(PointCloud, '/pointcloud', 10)
-        self.odom_publisher = self.create_publisher(Odometry, '/odom_raw', 10)
+        # --- COMMENTED OUT: using OptiTrack odom instead ---
+        # self.odom_publisher = self.create_publisher(Odometry, '/odom_raw', 10)
         
         # --- IMU PUBLISHER ---
         self.imu_publisher = self.create_publisher(Imu, '/imu', 10)
@@ -167,8 +168,8 @@ class QCarHardwareInterface(Node):
             except Exception as e:
                 pass
 
-            # Update odom + publish
-            self.update_odometry(current_time, encoder_count)
+            # --- COMMENTED OUT: using OptiTrack odom instead ---
+            # self.update_odometry(current_time, encoder_count)
 
         except Exception as e:
             self.get_logger().error(f'Control loop error: {str(e)}')

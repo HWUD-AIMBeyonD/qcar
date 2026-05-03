@@ -36,10 +36,10 @@ Visualization Manager:
       Show Names: true
 
     - Class: rviz_default_plugins/Path
-      Name: Fused Path (EKF)
+      Name: OptiTrack Fused Path
       Enabled: true
       Topic: /path_fused
-      Color: 0; 255; 0
+      Color: 0; 100; 255
       Alpha: 1
       Buffer Length: 1
       Line Style: Lines
@@ -73,6 +73,31 @@ Visualization Manager:
       Keep: 1
       Position Tolerance: 0.1
       Shape: Arrow
+
+    - Class: rviz_default_plugins/Odometry
+      Name: OptiTrack Odom
+      Enabled: true
+      Topic: /odom_opti
+      Color: 0; 100; 255
+      Alpha: 0.8
+      Angle Tolerance: 0.1
+      Arrow Length: 0.15
+      Axes Length: 0.1
+      Axes Radius: 0.01
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Scale: 1
+        Position:
+          Alpha: 0.3
+          Color: 204; 51; 204
+          Scale: 1
+        Value: false
+      Keep: 100
+      Position Tolerance: 0.02
+      Shape: Arrow
+
 
   Global Options:
     Background Color: 48; 48; 48
