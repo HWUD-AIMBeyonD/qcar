@@ -1,31 +1,4 @@
 # ==============================================================================
-# AMCL (Localization) - Dashing compatible
-# ==============================================================================
-amcl:
-  ros__parameters:
-    use_sim_time: false
-    alpha1: 0.1
-    alpha2: 0.1
-    alpha3: 0.1
-    alpha4: 0.1
-    base_frame_id: "base"
-    global_frame_id: "map"
-    odom_frame_id: "odom"
-    laser_likelihood_max_dist: 2.0
-    max_beams: 60
-    max_particles: 1000
-    min_particles: 500
-    pf_err: 0.05
-    pf_z: 0.99
-    robot_model_type: "differential"
-    save_pose_rate: 0.5
-    tf_broadcast: true
-    z_hit: 0.5
-    z_max: 0.05
-    z_rand: 0.5
-    z_short: 0.05
-
-# ==============================================================================
 # BEHAVIOR TREE
 # ==============================================================================
 bt_navigator:
@@ -33,7 +6,7 @@ bt_navigator:
     use_sim_time: false
     global_frame: map
     robot_base_frame: base
-    odom_topic: /odom
+    odom_topic: /odometry_filtered
     bt_loop_duration: 10
     default_server_timeout: 20
     bt_xml_filename: /home/nvidia/qcar_ws/src/qcar_nav2_bringup/config/bt_navigation.xml
@@ -118,8 +91,8 @@ controller_server:
           obstacle_min_range: 0.15
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.55
-        cost_scaling_factor: 5.0
+        inflation_radius: 0.2
+        cost_scaling_factor: 3.0
 
 # ==============================================================================
 #  OPTION B: STANLEY CONTROLLER
@@ -209,15 +182,14 @@ global_costmap:
           obstacle_min_range: 0.15
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.55
-        cost_scaling_factor: 5.0
+        inflation_radius: 0.25
+        cost_scaling_factor: 3.0
 
 lifecycle_manager:
   ros__parameters:
     use_sim_time: false
     autostart: true
     node_names:
-      - /amcl
       - /global_costmap/costmap
       - /world_model
       - /navfn_planner

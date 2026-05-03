@@ -290,6 +290,9 @@ class QCarHardwareInterface(Node):
         # Negate angles (same convention as pointcloud)
         neg_angles = -angles
 
+         #Wrap to [0, 2π] range
+        neg_angles = neg_angles % (2.0 * math.pi)
+        
         # Create uniform angle grid
         a_min = float(np.min(neg_angles))
         a_max = float(np.max(neg_angles))
@@ -461,3 +464,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+

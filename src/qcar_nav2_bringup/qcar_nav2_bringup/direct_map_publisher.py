@@ -41,8 +41,8 @@ class DirectMapPublisher(Node):
                 self.publisher.publish(self.map_msg)
                 self.get_logger().info(f'Published map: {self.map_msg.info.width}x{self.map_msg.info.height}')
                 
-                # Keep republishing every 2 seconds
-                self.timer = self.create_timer(0.5, self.republish_map)
+                # Keep republishing periodically
+                self.timer = self.create_timer(2.0, self.republish_map)
         else:
             self.get_logger().error('No yaml_filename provided!')
     
@@ -104,7 +104,6 @@ class DirectMapPublisher(Node):
             msg.info.origin.position.x = float(origin[0])
             msg.info.origin.position.y = float(origin[1])
             msg.info.origin.position.z = 0.0
-            
             # Handle yaw in origin
             if len(origin) > 2:
                 yaw = float(origin[2])
@@ -143,3 +142,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+

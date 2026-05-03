@@ -1,0 +1,7 @@
+image: /home/nvidia/qcar_ws/maps/final_map005.pgm
+mode: trinary
+resolution: 0.05
+origin: [-0.849, -1.42, 0]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.25

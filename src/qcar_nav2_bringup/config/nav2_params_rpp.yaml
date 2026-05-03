@@ -1,41 +1,9 @@
-# ==============================================================================
-# NAV2 PARAMS: RPP CONTROLLER VERSION
-# ==============================================================================
-amcl:
-  ros__parameters:
-    use_sim_time: false
-    alpha1: 0.1
-    alpha2: 0.1
-    alpha3: 0.1
-    alpha4: 0.1
-    base_frame_id: "base"
-    global_frame_id: "map"
-    map_topic: "/map"
-    qos_map:
-      reliability: "reliable"
-      durability: "transient_local"
-      depth: 1
-    laser_likelihood_max_dist: 2.0
-    max_beams: 60
-    max_particles: 1000
-    min_particles: 500
-    odom_frame_id: "odom"
-    pf_err: 0.05
-    pf_z: 0.99
-    robot_model_type: "nav2_amcl::DifferentialMotionModel"
-    save_pose_rate: 0.5
-    tf_broadcast: true
-    z_hit: 0.5
-    z_max: 0.05
-    z_rand: 0.5
-    z_short: 0.05
-
 bt_navigator:
   ros__parameters:
     use_sim_time: false
     global_frame: map
     robot_base_frame: base
-    odom_topic: /odom
+    odom_topic: /odometry_filtered
     bt_loop_duration: 10
     default_server_timeout: 20
     bt_xml_filename: /home/nvidia/qcar_ws/src/qcar_nav2_bringup/config/bt_navigation.xml
@@ -80,7 +48,7 @@ controller_server:
     min_theta_velocity_threshold: 0.001
 
     FollowPath:
-      desired_linear_vel: 0.5
+      desired_linear_vel: 0.3
       lookahead_dist: 0.6            
       min_lookahead_dist: 0.30        
       max_lookahead_dist: 0.90        
@@ -119,8 +87,8 @@ controller_server:
           obstacle_min_range: 0.15
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.55
-        cost_scaling_factor: 5.0
+        inflation_radius: 0.2
+        cost_scaling_factor: 3.0
 
 # ==============================================================================
 # GLOBAL COSTMAP & WORLD MODEL
@@ -159,8 +127,8 @@ global_costmap:
           obstacle_min_range: 0.15
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        inflation_radius: 0.55
-        cost_scaling_factor: 5.0
+        inflation_radius: 0.2
+        cost_scaling_factor: 3.0
 
 world_model:
   ros__parameters:
@@ -173,9 +141,9 @@ lifecycle_manager:
     use_sim_time: false
     autostart: true
     node_names:
-      - /amcl
+      - bt_navigator 
       - /global_costmap/costmap
       - /world_model
       - /navfn_planner
       - /recoveries_server
-      - /bt_navigator
+

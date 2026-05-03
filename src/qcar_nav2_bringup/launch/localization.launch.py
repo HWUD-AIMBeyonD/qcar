@@ -16,7 +16,7 @@ def generate_launch_description():
     # Hardcoded map file
     default_map_path = os.path.join(
         os.environ.get('HOME', '/home/nvidia'),
-        'qcar_ws', 'maps', 'qcar_map_20260205_064547.yaml'
+        'qcar_ws', 'maps', 'final_map005.yaml'
     )
 
     declare_use_sim_time = DeclareLaunchArgument(
@@ -48,13 +48,20 @@ def generate_launch_description():
             'base_frame_id': 'base',
             'odom_frame_id': 'odom',
             'global_frame_id': 'map',
-            'min_particles': 100,
-            'max_particles': 500,
-            'max_beams': 30,
-            'laser_likelihood_max_dist': 2.0,
-            'tf_broadcast': True,
+            'scan_topic': '/scan',
+            'num_particles': 500,
+            'update_rate': 10.0,
+            'sigma_hit': 0.2,
+            'scan_subsample': 10,
+            'z_hit': 0.95,
+            'z_rand': 0.05,
             'update_min_d': 0.1,
-            'update_min_a': 0.2,
+            'update_min_a': 0.15,
+            'alpha1': 0.2,
+            'alpha2': 0.2,
+            'alpha3': 0.2,
+            'alpha4': 0.2,
+            'random_particle_pct': 0.05,
         }]
     )
 
@@ -65,4 +72,3 @@ def generate_launch_description():
         direct_map_publisher,
         amcl,
     ])
-
