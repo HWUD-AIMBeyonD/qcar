@@ -37,8 +37,12 @@ class QCarHardwareInterface(Node):
         # Declare parameters
         self.declare_parameter('max_speed', 0.5)
         self.declare_parameter('max_steering_angle', 0.5)
+        # set false when another source (e.g. http_odom_node with OptiTrack)
+        # owns the odom -> base transform
+        self.declare_parameter('publish_odom_tf', True)
         self.max_speed = self.get_parameter('max_speed').value
         self.max_steering = self.get_parameter('max_steering_angle').value
+        self.publish_odom_tf = self.get_parameter('publish_odom_tf').value
 
         # Initialize QCar hardware ONCE
         try:
@@ -408,6 +412,9 @@ class QCarHardwareInterface(Node):
         return [qx, qy, qz, qw]
 
     def publish_tf(self, current_time):
+        if not self.publish_odom_tf:
+            return
+
         t = TransformStamped()
         t.header.stamp = current_time.to_msg()
         t.header.frame_id = 'odom'
