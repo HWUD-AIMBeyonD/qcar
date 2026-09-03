@@ -5,11 +5,13 @@ import urllib.request
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import TransformStamped
-from tf2_ros import TransformBroadcaster
+# no tf2_ros python on the QCar's Dashing install -- publish TFMessage on /tf
+# by hand, the same way qcar_odom/simple_ekf and qcar_amcl do
+from tf2_msgs.msg import TFMessage
 
 WARN_THROTTLE_SEC = 2.0
 
@@ -43,14 +45,34 @@ class HttpOdomNode(Node):
         self.prev_yaw = None
         self.last_warn_time = {}
 
-        # depth-10 keep-last, reliable -- the QoSProfile defaults on every
-        # distro; the named policy enums differ between Dashing and later
-        # releases, so they are deliberately not spelled out here
-        qos = QoSProfile(depth=10)
+        qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+
+        # TF QoS (dual for compatibility)
+        tf_qos_reliable = QoSProfile(
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=100
+        )
+        tf_qos_best_effort = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=100
+        )
 
         self.odom_pub = self.create_publisher(Odometry, '/odom_opti', qos)
 
-        self.tf_broadcaster = TransformBroadcaster(self) if self.publish_tf else None
+        if self.publish_tf:
+            self.tf_pub_reliable = self.create_publisher(
+                TFMessage, '/tf', tf_qos_reliable)
+            self.tf_pub_best_effort = self.create_publisher(
+                TFMessage, '/tf', tf_qos_best_effort)
+        else:
+            self.tf_pub_reliable = None
+            self.tf_pub_best_effort = None
 
         self.timer = self.create_timer(1.0 / rate_hz, self.poll_cb)
 
@@ -154,7 +176,7 @@ class HttpOdomNode(Node):
 
         self.odom_pub.publish(odom)
 
-        if self.tf_broadcaster is not None:
+        if self.publish_tf:
             t = TransformStamped()
             t.header.stamp = odom.header.stamp
             t.header.frame_id = self.odom_frame
@@ -163,7 +185,11 @@ class HttpOdomNode(Node):
             t.transform.translation.y = y
             t.transform.translation.z = 0.0
             t.transform.rotation = odom.pose.pose.orientation
-            self.tf_broadcaster.sendTransform(t)
+
+            tf_msg = TFMessage()
+            tf_msg.transforms.append(t)
+            self.tf_pub_reliable.publish(tf_msg)
+            self.tf_pub_best_effort.publish(tf_msg)
 
 
 def main(args=None):
