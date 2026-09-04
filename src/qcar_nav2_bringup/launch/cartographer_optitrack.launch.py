@@ -79,6 +79,9 @@ def generate_launch_description():
             'odom_frame': 'odom',
             'child_frame': 'base',
             'publish_tf': True,
+            # OptiTrack's zero heading is 90 deg off ROS's +X-forward
+            # convention. Flip to -90.0 if the car ends up facing left.
+            'yaw_offset_deg': 90.0,
         }],
     )
 
@@ -122,3 +125,4 @@ def generate_launch_description():
         cartographer_node,
         occupancy_grid_node
     ])
+

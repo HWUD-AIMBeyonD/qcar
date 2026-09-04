@@ -31,7 +31,11 @@ class HttpOdomNode(Node):
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('child_frame', 'base')
         self.declare_parameter('publish_tf', True)
+        # added to the endpoint's yaw before it is used -- OptiTrack's zero
+        # heading need not line up with ROS's +X-forward convention
+        self.declare_parameter('yaw_offset_deg', 0.0)
 
+        self.yaw_offset_deg = self.get_parameter('yaw_offset_deg').value
         self.pose_url = self.get_parameter('pose_url').value
         self.request_timeout = self.get_parameter('request_timeout').value
         self.odom_frame = self.get_parameter('odom_frame').value
@@ -117,7 +121,9 @@ class HttpOdomNode(Node):
             return
 
         x, y, yaw_deg = sample
-        yaw = math.radians(yaw_deg)
+        yaw = math.radians(yaw_deg + self.yaw_offset_deg)
+        # wrap to [-pi, pi] so the offset cannot push yaw out of range
+        yaw = math.atan2(math.sin(yaw), math.cos(yaw))
 
         # restamp with the local clock; the endpoint carries no usable stamp
         now = self.get_clock().now()
@@ -205,3 +211,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
