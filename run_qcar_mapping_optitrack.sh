@@ -53,12 +53,24 @@ echo "=========================================="
 echo "Starting QCar OPTITRACK MAPPING System"
 echo "=========================================="
 
-# --- 1. Hardware interface (sudo, TF DISABLED -- OptiTrack owns odom->base) ---
-echo "✓ Starting unified hardware interface (odom TF disabled)..."
+# Release any QCar/LiDAR handles left locked by a previous run -- if these are
+# still held, hardware init fails silently and you get no /scan and no motors.
+echo "✓ Pre-flight hardware reset..."
+sudo pkill -f qcar_hardware_interface 2>/dev/null
+sleep 1
+cleanup_hardware
+sleep 2
+
+# --- 1. Hardware interface (sudo) ---
+# NOTE: no -p publish_odom_tf:=false here on purpose. publish_tf() in
+# qcar_hardware_interface.py is never called (update_odometry is commented
+# out), so the hardware interface publishes no odom->base TF either way, and
+# a bool override on Dashing's CLI is a needless way to kill the node.
+echo "✓ Starting unified hardware interface..."
 sudo -E PYTHONPATH=$PYTHONPATH LD_LIBRARY_PATH=$LD_LIBRARY_PATH DISPLAY=$DISPLAY bash -c '
     source /opt/ros/dashing/setup.bash
     source ~/qcar_ws/install/setup.bash
-    python3 ~/qcar_ws/install/qcar_nav2_bringup/lib/qcar_nav2_bringup/qcar_hardware_interface --ros-args -p max_speed:=0.5 -p max_steering_angle:=0.5 -p publish_odom_tf:=false
+    python3 ~/qcar_ws/install/qcar_nav2_bringup/lib/qcar_nav2_bringup/qcar_hardware_interface --ros-args -p max_speed:=0.5 -p max_steering_angle:=0.5
 ' &
 HARDWARE_PID=$!
 
@@ -70,23 +82,19 @@ echo "✓ Starting robot_description..."
 ros2 launch robot_description simple_robot_launch.py &
 RVIZ_PID=$!
 
-sleep 5
+# Same long wait as run_qcar_mapping.sh -- short waits here cause TF race
+# conditions where SLAM starts before base->lidar exists.
+echo "  -> Waiting 20 SECONDS for TF tree/RViz to stabilize..."
+for i in {20..1}; do
+    echo -ne "     $i... \r"
+    sleep 1
+done
+echo ""
 
-# --- 3. OptiTrack HTTP odometry (provides /odom_opti + TF odom->base) ---
-echo "✓ Starting OptiTrack HTTP odom node..."
-ros2 run qcar_http_odom http_odom_node --ros-args \
-    -p pose_url:='http://192.168.0.3:8000/QCar/pose' \
-    -p rate_hz:=50.0 \
-    -p odom_frame:='odom' \
-    -p child_frame:='base' \
-    -p publish_tf:=true &
-OPTI_PID=$!
-
-echo "  -> Waiting 5 seconds for TF tree to stabilize..."
-sleep 5
-
-# --- 4. Cartographer SLAM (reads /scan + /odom_opti + TF odom->base) ---
-echo "✓ Starting Cartographer..."
+# --- 3. Cartographer SLAM + OptiTrack odometry ---
+# cartographer_optitrack.launch.py starts http_odom_node itself, so do NOT
+# also start it here -- two publishers on /odom_opti and /tf would fight.
+echo "✓ Starting Cartographer + OptiTrack odom..."
 ros2 launch qcar_nav2_bringup cartographer_optitrack.launch.py &
 CARTO_PID=$!
 
@@ -102,7 +110,7 @@ echo "=========================================="
 
 # Wait for Ctrl+C
 trap "echo ''; echo 'Stopping...';
-      kill $RVIZ_PID $CARTO_PID $OPTI_PID 2>/dev/null;
+      kill $RVIZ_PID $CARTO_PID 2>/dev/null;
       sudo kill $HARDWARE_PID 2>/dev/null;
       sudo pkill -f qcar_hardware_interface;
       sudo pkill -f http_odom_node;
