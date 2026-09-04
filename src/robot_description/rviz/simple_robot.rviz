@@ -17,17 +17,47 @@ Visualization Manager:
     - Class: rviz_default_plugins/TF
       Name: TF
       Value: true
+
+    # OptiTrack odometry trail -- green arrows dropped every 2 cm.
+    # If this stays empty while driving, /odom_opti is not updating.
+    - Class: rviz_default_plugins/Odometry
+      Name: OptiTrack Odom (/odom_opti)
+      Enabled: true
+      Value: true
+      Topic: /odom_opti
+      Color: 0; 255; 0
+      Alpha: 1
+      Angle Tolerance: 0.1
+      Arrow Length: 0.15
+      Axes Length: 0.1
+      Axes Radius: 0.01
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Scale: 1
+        Position:
+          Alpha: 0.3
+          Color: 204; 51; 204
+          Scale: 1
+        Value: false
+      Keep: 1000
+      Position Tolerance: 0.02
+      Shape: Arrow
   Global Options:
-    Fixed Frame: base
+    # must be odom, not base -- with base fixed the car never appears to move
+    # and the trail cannot accumulate
+    Fixed Frame: odom
   Tools:
     - Class: rviz_default_plugins/MoveCamera
   Value: true
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.7
+      Distance: 5
       Name: Current View
-      Pitch: 0.33
+      Pitch: 0.9
+      Target Frame: base
       Value: Orbit (rviz)
       Yaw: 5.5
 Window Geometry:
