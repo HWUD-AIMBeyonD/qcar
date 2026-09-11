@@ -30,6 +30,16 @@
 
 CONTROLLER_TYPE="${1:-rpp}"
 
+# map -> odom offset. The correct constant for new_map is baked into
+# localization_optitrack.launch.py as the arg defaults; these env vars only
+# override it, e.g. when running against a different map:
+#   MAP_ODOM_X=1.2 MAP_ODOM_Y=-0.4 MAP_ODOM_YAW=0.3 bash run_qcar_nav_optitrack.sh
+# MAP_ODOM_YAW is in RADIANS.
+MAP_ODOM_ARGS=""
+[ -n "$MAP_ODOM_X" ]   && MAP_ODOM_ARGS="$MAP_ODOM_ARGS map_odom_x:=$MAP_ODOM_X"
+[ -n "$MAP_ODOM_Y" ]   && MAP_ODOM_ARGS="$MAP_ODOM_ARGS map_odom_y:=$MAP_ODOM_Y"
+[ -n "$MAP_ODOM_YAW" ] && MAP_ODOM_ARGS="$MAP_ODOM_ARGS map_odom_yaw:=$MAP_ODOM_YAW"
+
 source /opt/ros/dashing/setup.bash
 source ~/qcar_ws/install/setup.bash
 
@@ -126,7 +136,7 @@ sleep 5
 
 # --- 4. Localization (map publisher + static identity map->odom TF) ---
 echo "* Starting OptiTrack localization (map + static map->odom)..."
-ros2 launch qcar_nav2_bringup localization_optitrack.launch.py &
+ros2 launch qcar_nav2_bringup localization_optitrack.launch.py ${MAP_ODOM_ARGS} &
 LOC_PID=$!
 
 sleep 3
@@ -159,3 +169,4 @@ trap "echo ''; echo 'Stopping...';
       exit" INT TERM
 
 wait
+
