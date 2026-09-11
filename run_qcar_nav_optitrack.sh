@@ -121,14 +121,12 @@ echo ""
 # yaw_offset_deg MUST match cartographer_optitrack.launch.py (90.0) -- the map
 # was built in that frame, so a different offset here rotates the robot
 # relative to the map by that difference.
+# Started through the launch file, NOT `ros2 run ... --ros-args -p ...`:
+# --ros-args/-p only exist from Eloquent on, so Dashing silently ignores them
+# and the node falls back to its default yaw_offset_deg of 0.0.
 echo "* Starting OptiTrack HTTP odom node..."
-ros2 run qcar_http_odom http_odom_node --ros-args \
-    -p pose_url:='http://192.168.0.3:8000/QCar/pose' \
-    -p rate_hz:=50.0 \
-    -p request_timeout:=0.1 \
-    -p odom_frame:='odom' \
-    -p child_frame:='base' \
-    -p yaw_offset_deg:=90.0 &
+ros2 launch qcar_http_odom http_odom.launch.py \
+    pose_url:='http://192.168.0.3:8000/QCar/pose' &
 OPTI_PID=$!
 
 echo "  -> Waiting 5 seconds for odom->base TF..."

@@ -8,14 +8,15 @@ and publishes:
   - /tf         (odom -> base), unless publish_tf is turned off
 
 NOTE: qcar_odom's simple_ekf also broadcasts odom -> base. Run only one of
-them, or start this node directly with -p publish_tf:=false (see below).
+them, or set 'publish_tf' to False below.
 
 Usage:
   ros2 launch qcar_http_odom http_odom.launch.py
   ros2 launch qcar_http_odom http_odom.launch.py pose_url:=http://192.168.0.5:8000/QCar/pose
 
-Or without launch, for full parameter control:
-  ros2 run qcar_http_odom http_odom_node --ros-args -p publish_tf:=false
+Always start the node through this file (or another launch file) on Dashing.
+`ros2 run ... --ros-args -p name:=value` is Eloquent+ syntax: Dashing ignores
+it without an error, so yaw_offset_deg would silently fall back to 0.0.
 """
 
 from launch import LaunchDescription
