@@ -16,11 +16,15 @@ class NavGoalSender(Node):
     def __init__(self):
         super().__init__('nav_goal_sender')
 
-        # Action client for Nav2
-        self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+        # Action client for Nav2. Dashing's bt_navigator serves 'NavigateToPose'
+        # (CamelCase, like /Spin and /BackUp); 'navigate_to_pose' is Eloquent+.
+        self.nav_client = ActionClient(self, NavigateToPose, 'NavigateToPose')
 
         self.get_logger().info('Waiting for Nav2 action server...')
-        self.nav_client.wait_for_server()
+        while not self.nav_client.wait_for_server(timeout_sec=5.0):
+            self.get_logger().warn(
+                'Still no /NavigateToPose server -- is bt_navigator active? '
+                'Check: ros2 lifecycle get /bt_navigator')
         self.get_logger().info('Nav2 action server connected!')
 
     def send_goal(self, x, y, yaw_degrees=0.0):

@@ -62,7 +62,12 @@ def generate_launch_description():
     # pose -- not at OptiTrack's rig origin. For new_map, mapping began at
     # OptiTrack pose:
     #
-    #     T_odom_map = (x=2.154011, y=1.927704, yaw=1.618198 rad / 92.716 deg)
+    #     T_odom_map = (x=2.154011, y=1.927704, yaw=3.188994 rad / 182.716 deg)
+    #
+    # The yaw is the RAW endpoint yaw (92.716 deg) PLUS http_odom_node's
+    # yaw_offset_deg (90). Leaving the offset out rotates the whole map 90 deg
+    # CCW about the start point: the car spawns in the right place but faces
+    # the left wall.
     #
     # static_transform_publisher needs the opposite direction (the pose of
     # odom expressed in map), so these defaults are its inverse:
@@ -72,23 +77,26 @@ def generate_launch_description():
     # Sanity check: map (0,0) lands on a free cell at pixel (34,245), in open
     # space next to a wall -- i.e. exactly where the car started mapping.
     #
-    # Re-derive these for any NEW map: read /odom_opti at the instant mapping
-    # starts, then invert as above.
+    # Re-derive these for any NEW map: read /odom_opti (NOT the raw HTTP
+    # endpoint -- it lacks yaw_offset_deg) at the instant mapping starts, then
+    # invert as above.
     declare_map_odom_x = DeclareLaunchArgument(
         'map_odom_x',
-        default_value='-1.823473',
+        default_value='2.242934',
         description='X of the odom origin expressed in the map frame'
     )
 
+    # Derived value is 1.823473; hand-tuned 5 cm towards map -Y (the car's
+    # right at its start heading) so the car lines up with the map.
     declare_map_odom_y = DeclareLaunchArgument(
         'map_odom_y',
-        default_value='2.242934',
+        default_value='1.773473',
         description='Y of the odom origin expressed in the map frame'
     )
 
     declare_map_odom_yaw = DeclareLaunchArgument(
         'map_odom_yaw',
-        default_value='-1.618198',
+        default_value='3.094191',
         description='Yaw of the odom origin in the map frame, in RADIANS'
     )
 
