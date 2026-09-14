@@ -18,14 +18,68 @@ Visualization Manager:
       Name: TF
       Value: true
 
-    # OptiTrack odometry trail -- green arrows dropped every 2 cm.
+    # Map (republished every 2 s by direct_map_publisher). Only present
+    # during nav; harmless "no map received" status otherwise.
+    - Class: rviz_default_plugins/Map
+      Name: Map (/map)
+      Enabled: true
+      Value: true
+      Topic: /map
+      Alpha: 0.7
+      Color Scheme: map
+      Draw Behind: true
+
+    # GREEN: global plan from navfn_planner (map frame). If this never
+    # appears after a goal, ComputePathToPose failed -- no path at all.
+    - Class: rviz_default_plugins/Path
+      Name: Global Plan (/plan)
+      Enabled: true
+      Value: true
+      Topic: /plan
+      Color: 0; 255; 0
+      Alpha: 1
+      Line Style: Billboards
+      Line Width: 0.04
+      Buffer Length: 1
+
+    # BLUE: the same plan as the RPP controller sees it (base frame), one
+    # update per control cycle. Should sit exactly on top of the green line.
+    - Class: rviz_default_plugins/Path
+      Name: Controller Plan (/local_plan)
+      Enabled: true
+      Value: true
+      Topic: /local_plan
+      Color: 0; 85; 255
+      Alpha: 1
+      Line Style: Billboards
+      Line Width: 0.02
+      Buffer Length: 1
+
+    # RED ARROW: the point the controller is steering towards. It should
+    # stay ~lookahead_dist AHEAD of the car; if it ends up behind the car,
+    # that's why the car goes straight.
+    - Class: rviz_default_plugins/Pose
+      Name: Lookahead Point (/lookahead_point)
+      Enabled: true
+      Value: true
+      Topic: /lookahead_point
+      Color: 255; 0; 0
+      Alpha: 1
+      Shape: Arrow
+      Shaft Length: 0.15
+      Shaft Radius: 0.02
+      Head Length: 0.08
+      Head Radius: 0.05
+
+    # OptiTrack odometry trail -- yellow arrows dropped every 2 cm (was green;
+    # changed so it doesn't clash with the global plan).
     # If this stays empty while driving, /odom_opti is not updating.
     - Class: rviz_default_plugins/Odometry
       Name: OptiTrack Odom (/odom_opti)
       Enabled: true
       Value: true
       Topic: /odom_opti
-      Color: 0; 255; 0
+      Color: 255; 200; 0
       Alpha: 1
       Angle Tolerance: 0.1
       Arrow Length: 0.15

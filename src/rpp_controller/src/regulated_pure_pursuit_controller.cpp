@@ -37,6 +37,9 @@ void RegulatedPurePursuitController::configure(
   node->get_parameter(plugin_name_ + ".max_lookahead_dist", max_lookahead_dist_);
   node->get_parameter(plugin_name_ + ".use_velocity_scaled_lookahead_dist", use_velocity_scaled_lookahead_dist_);
 
+  local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
+  lookahead_pub_ = node->create_publisher<geometry_msgs::msg::PoseStamped>("lookahead_point", 1);
+
   RCLCPP_INFO(node->get_logger(), 
     "Regulated Pure Pursuit controller configured: desired_vel=%.2f, lookahead=%.2f",
     desired_linear_vel_, lookahead_dist_);
@@ -74,7 +77,8 @@ geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocity
 
   // 1. Transform global plan to robot frame
   auto transformed_plan = transformGlobalPlan(pose);
-  
+  local_plan_pub_->publish(transformed_plan);
+
   if (transformed_plan.poses.empty()) {
     RCLCPP_WARN(rclcpp::get_logger("RegulatedPurePursuitController"), 
       "Transformed plan is empty, stopping robot");
@@ -86,6 +90,8 @@ geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocity
 
   // 3. Find the lookahead point on the path
   auto lookahead_pose = getLookAheadPoint(lookahead, transformed_plan);
+  lookahead_pose.header.frame_id = "base";
+  lookahead_pub_->publish(lookahead_pose);
 
   // 4. Pure Pursuit math: calculate curvature
   // The lookahead point is in robot frame (x=forward, y=left)
