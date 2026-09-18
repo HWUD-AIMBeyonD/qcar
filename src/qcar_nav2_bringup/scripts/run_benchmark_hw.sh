@@ -11,7 +11,10 @@
 # ros2 action send_goal) while it records.
 #
 # Usage:
-#   ./run_benchmark_hw.sh [--runs N] [--csv FILE] [--bags-dir DIR]
+#   ./run_benchmark_hw.sh [--runs N] [--csv FILE] [--bags-dir DIR] [--controller NAME]
+#
+# --controller only sets the label in the CSV and the bag name -- it does NOT
+# choose the controller. That is the argument to run_qcar_nav_optitrack.sh.
 #
 # What it does per trial:
 #   1. Prompts you to place the robot at the start position
@@ -37,7 +40,7 @@ CSV_FILE="kpi_results_hw.csv"
 BAGS_DIR="rosbags_hw"
 
 # Labels written to the CSV -- must match what the nav stack is running
-# (run_qcar_nav_optitrack.sh rpp, navfn_planner in nav2_online.launch.py)
+# (the arg to run_qcar_nav_optitrack.sh, navfn_planner in nav2_online.launch.py)
 CONTROLLER="rpp"
 PLANNER="navfn"
 
@@ -53,8 +56,11 @@ while [[ $# -gt 0 ]]; do
         --runs)    RUNS="$2"; shift 2 ;;
         --csv)     CSV_FILE="$2"; shift 2 ;;
         --bags-dir) BAGS_DIR="$2"; shift 2 ;;
+        --controller) CONTROLLER="$2"; shift 2 ;;
         -h|--help)
-            echo "Usage: $0 [--runs N] [--csv FILE] [--bags-dir DIR]"
+            echo "Usage: $0 [--runs N] [--csv FILE] [--bags-dir DIR] [--controller NAME]"
+            echo "  --controller must match the stack you launched:"
+            echo "                 rpp | stanley | vector"
             exit 0
             ;;
         *) echo "Unknown option: $1"; exit 1 ;;

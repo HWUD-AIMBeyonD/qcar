@@ -138,7 +138,7 @@ def generate_launch_description():
     # 7. CONTROLLER SERVER (STANLEY)
     stanley_server = Node(
         condition=IfCondition(PythonExpression(["'", controller_type, "' == 'stanley'"])),
-        package='stanley_controller', node_executable='stanley_controller_server', node_name='stanley_controller_server', output='screen',
+        package='stanley_controller', node_executable='stanley_controller_server', node_name='controller_server', output='screen',
         parameters=[stanley_params, {'use_sim_time': use_sim_time}])
 
 

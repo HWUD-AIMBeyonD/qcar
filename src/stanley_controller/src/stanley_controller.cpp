@@ -22,7 +22,7 @@ void StanleyController::configure(
 
   // Declare and get parameters
   // Defaults suitable for QCar
-  node->declare_parameter(plugin_name_ + ".desired_linear_vel", rclcpp::ParameterValue(0.5));
+  node->declare_parameter(plugin_name_ + ".desired_linear_vel", rclcpp::ParameterValue(0.3));
   node->declare_parameter(plugin_name_ + ".max_angular_vel", rclcpp::ParameterValue(1.0));
   node->declare_parameter(plugin_name_ + ".k_gain", rclcpp::ParameterValue(0.5)); 
   node->declare_parameter(plugin_name_ + ".wheelbase", rclcpp::ParameterValue(0.256)); 
@@ -32,7 +32,10 @@ void StanleyController::configure(
   node->get_parameter(plugin_name_ + ".k_gain", k_gain_);
   node->get_parameter(plugin_name_ + ".wheelbase", wheelbase_);
 
-  RCLCPP_INFO(node->get_logger(), 
+  local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
+  lookahead_pub_ = node->create_publisher<geometry_msgs::msg::PoseStamped>("lookahead_point", 1);
+
+  RCLCPP_INFO(node->get_logger(),
     "Stanley Controller configured: desired_vel=%.2f, k_gain=%.2f, wheelbase=%.3f",
     desired_linear_vel_, k_gain_, wheelbase_);
 }
@@ -67,7 +70,8 @@ geometry_msgs::msg::TwistStamped StanleyController::computeVelocityCommands(
 
   // 1. Transform global plan to robot frame (base_link)
   auto transformed_plan = transformGlobalPlan(pose);
-  
+  local_plan_pub_->publish(transformed_plan);
+
   if (transformed_plan.poses.empty()) {
     RCLCPP_WARN(rclcpp::get_logger("StanleyController"), 
       "Transformed plan is empty, stopping robot");
@@ -99,7 +103,15 @@ geometry_msgs::msg::TwistStamped StanleyController::computeVelocityCommands(
   // The 'y' component of the closest point IS the lateral error.
   double cx = transformed_plan.poses[closest_index].pose.position.x;
   double cy = transformed_plan.poses[closest_index].pose.position.y;
-  
+
+  // Stanley has no lookahead point; the equivalent "what am I tracking" marker
+  // is the closest path pose to the front axle. Published on the same topic as
+  // the RPP lookahead so the red arrow in RViz means the same thing.
+  auto target_pose = transformed_plan.poses[closest_index];
+  target_pose.header.frame_id = "base";
+  lookahead_pub_->publish(target_pose);
+
+
   // Standard Stanley formulation: 
   // e is positive if the path is to the left of the vehicle.
   // In robot frame, positive y is left. So e = cy.
@@ -142,17 +154,32 @@ geometry_msgs::msg::TwistStamped StanleyController::computeVelocityCommands(
   // 7. Clamp steering to physical limits
   delta = std::max(std::min(delta, max_angular_vel_), -max_angular_vel_);
 
-  // 8. Convert Steering Angle (delta) to Angular Velocity (omega)
+  // 8. REGULATION: slow down on sharp curves, same thresholds as the RPP
+  // controller so the two are comparable. For an Ackermann vehicle the path
+  // curvature implied by the steering angle is k = tan(delta) / L, which is
+  // the same quantity RPP regulates on.
+  double linear_vel = desired_linear_vel_;
+  double abs_curvature = std::abs(std::tan(delta) / wheelbase_);
+  if (abs_curvature > 0.5) {
+    linear_vel *= 0.5;   // Cut speed in half for sharp turns
+  } else if (abs_curvature > 0.3) {
+    linear_vel *= 0.75;  // Reduce speed moderately
+  }
+
+  // 9. Convert Steering Angle (delta) to Angular Velocity (omega)
   // The local planner must output Twist (v, w).
   // Formula: w = (v / L) * tan(delta)
-  double angular_vel = (desired_linear_vel_ / wheelbase_) * std::tan(delta);
+  // Uses the regulated speed, so the hardware interface's inverse mapping
+  // atan(L*w/v) recovers the same delta we clamped above.
+  double angular_vel = (linear_vel / wheelbase_) * std::tan(delta);
 
-  // 9. Set command
-  cmd_vel.twist.linear.x = desired_linear_vel_;
+  // 10. Set command
+  cmd_vel.twist.linear.x = linear_vel;
   cmd_vel.twist.angular.z = angular_vel;
 
   RCLCPP_DEBUG(rclcpp::get_logger("StanleyController"),
-    "CTE: %.3f, HeadingErr: %.3f, Delta: %.3f", error_cross_track, error_heading, delta);
+    "CTE: %.3f, HeadingErr: %.3f, Delta: %.3f, Curv: %.3f, Linear: %.3f",
+    error_cross_track, error_heading, delta, abs_curvature, linear_vel);
 
   return cmd_vel;
 }
@@ -185,6 +212,28 @@ nav_msgs::msg::Path StanleyController::transformGlobalPlan(
     RCLCPP_ERROR(rclcpp::get_logger("StanleyController"), 
       "TF Transform failed: %s", ex.what());
     return local_path;
+  }
+
+  // Drop the stretch of path the car has already driven past, measured from
+  // the front axle (the point Stanley tracks). Without this the closest-point
+  // search can snap back to an earlier stretch that happens to pass nearby --
+  // on a course that doubles back, that sends the car round the loop again.
+  size_t closest = 0;
+  double closest_dist = std::numeric_limits<double>::max();
+  for (size_t i = 0; i < local_path.poses.size(); ++i) {
+    double d = std::hypot(local_path.poses[i].pose.position.x - wheelbase_,
+                          local_path.poses[i].pose.position.y);
+    if (d < closest_dist) {
+      closest_dist = d;
+      closest = i;
+    }
+  }
+  if (closest > 0) {
+    // Prune the stored plan too, so progress stays monotonic across cycles.
+    global_plan_.poses.erase(global_plan_.poses.begin(),
+                             global_plan_.poses.begin() + closest);
+    local_path.poses.erase(local_path.poses.begin(),
+                           local_path.poses.begin() + closest);
   }
 
   return local_path;

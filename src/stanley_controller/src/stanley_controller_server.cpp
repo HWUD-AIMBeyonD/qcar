@@ -23,8 +23,9 @@ public:
   using Action = nav2_msgs::action::FollowPath;
   using GoalHandle = rclcpp_action::ServerGoalHandle<Action>;
 
-  // Initialize node with SPECIFIC name for parameter lookup
-  StanleyControllerServer() : Node("stanley_controller_server")
+  // Node name must match the params key. Same name as the RPP server on
+  // purpose -- only one controller ever runs at a time.
+  StanleyControllerServer() : Node("controller_server")
   {
     RCLCPP_INFO(get_logger(), "Initializing Stanley Controller Server...");
 
