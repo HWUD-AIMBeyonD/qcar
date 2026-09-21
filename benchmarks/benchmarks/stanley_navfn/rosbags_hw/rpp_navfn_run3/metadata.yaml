@@ -2,23 +2,23 @@ rosbag2_bagfile_information:
   version: 1
   storage_identifier: sqlite3
   relative_file_paths:
-    - rpp_navfn_run2_20260915_091343.db3
+    - rpp_navfn_run3.db3
   duration:
-    nanoseconds: 35165988314
+    nanoseconds: 49256858145
   starting_time:
-    nanoseconds_since_epoch: 1789478514279050039
-  message_count: 2219
+    nanoseconds_since_epoch: 1789738988812889943
+  message_count: 2978
   topics_with_message_count:
     - topic_metadata:
         name: /cmd_vel
         type: geometry_msgs/msg/Twist
         serialization_format: cdr
-      message_count: 465
+      message_count: 549
     - topic_metadata:
         name: /odom_opti
         type: nav_msgs/msg/Odometry
         serialization_format: cdr
-      message_count: 1753
+      message_count: 2428
     - topic_metadata:
         name: /plan
         type: nav_msgs/msg/Path

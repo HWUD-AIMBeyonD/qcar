@@ -11,10 +11,11 @@
 # ros2 action send_goal) while it records.
 #
 # Usage:
-#   ./run_benchmark_hw.sh [--runs N] [--csv FILE] [--bags-dir DIR] [--controller NAME]
+#   ./run_benchmark_hw.sh --controller stanley
 #
 # --controller only sets the label in the CSV and the bag name -- it does NOT
 # choose the controller. That is the argument to run_qcar_nav_optitrack.sh.
+# It also picks the output folder: benchmarks/<controller>_<planner>/
 #
 # What it does per trial:
 #   1. Prompts you to place the robot at the start position
@@ -36,13 +37,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ---------- Configuration ----------
 RUNS=5
-CSV_FILE="kpi_results_hw.csv"
-BAGS_DIR="rosbags_hw"
 
 # Labels written to the CSV -- must match what the nav stack is running
 # (the arg to run_qcar_nav_optitrack.sh, navfn_planner in nav2_online.launch.py)
 CONTROLLER="rpp"
 PLANNER="navfn"
+
+# Results are grouped per controller/planner combo:
+#   benchmarks/<controller>_<planner>/kpi_results_hw.csv
+#   benchmarks/<controller>_<planner>/rosbags_hw/<combo>_runN/
+# Left empty here and filled in after arg parsing, so --controller feeds it.
+OUT_DIR=""
+CSV_FILE=""
+BAGS_DIR=""
 
 # Recording stops automatically after this many seconds if Enter isn't pressed
 RECORD_TIMEOUT=120
@@ -57,15 +64,27 @@ while [[ $# -gt 0 ]]; do
         --csv)     CSV_FILE="$2"; shift 2 ;;
         --bags-dir) BAGS_DIR="$2"; shift 2 ;;
         --controller) CONTROLLER="$2"; shift 2 ;;
+        --planner) PLANNER="$2"; shift 2 ;;
+        --out-dir) OUT_DIR="$2"; shift 2 ;;
         -h|--help)
-            echo "Usage: $0 [--runs N] [--csv FILE] [--bags-dir DIR] [--controller NAME]"
-            echo "  --controller must match the stack you launched:"
-            echo "                 rpp | stanley | vector"
+            echo "Usage: $0 [--controller NAME] [--planner NAME] [--runs N]"
+            echo "          [--out-dir DIR] [--csv FILE] [--bags-dir DIR]"
+            echo ""
+            echo "  --controller  rpp | stanley | vector -- must match the stack"
+            echo "                you launched. Only a label; it selects nothing."
+            echo "  --planner     defaults to navfn"
+            echo "  --out-dir     defaults to benchmarks/<controller>_<planner>"
+            echo "  --csv/--bags-dir override the paths derived from --out-dir"
             exit 0
             ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
+
+# Derive the output paths from the combo unless explicitly overridden
+[ -z "$OUT_DIR" ]   && OUT_DIR="benchmarks/${CONTROLLER}_${PLANNER}"
+[ -z "$CSV_FILE" ]  && CSV_FILE="${OUT_DIR}/kpi_results_hw.csv"
+[ -z "$BAGS_DIR" ]  && BAGS_DIR="${OUT_DIR}/rosbags_hw"
 
 mkdir -p "$BAGS_DIR"
 
@@ -174,3 +193,4 @@ echo "============================================"
 echo " Benchmark complete!"
 echo " Results: $CSV_FILE"
 echo "============================================"
+
