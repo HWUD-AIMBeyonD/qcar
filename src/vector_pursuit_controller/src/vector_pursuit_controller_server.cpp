@@ -24,7 +24,9 @@ public:
   using Action = nav2_msgs::action::FollowPath;
   using GoalHandle = rclcpp_action::ServerGoalHandle<Action>;
 
-  VectorPursuitControllerServer() : Node("vector_pursuit_controller_server")
+  // Node name must match the params key. Same name as the RPP and Stanley
+  // servers on purpose -- only one controller ever runs at a time.
+  VectorPursuitControllerServer() : Node("controller_server")
   {
     RCLCPP_INFO(get_logger(), "Initializing Vector Pursuit Controller Server...");
 

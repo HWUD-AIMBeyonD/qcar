@@ -192,7 +192,7 @@ def generate_launch_description():
     # 7. CONTROLLER SERVER (VECTOR)
     vector_server = Node(
         condition=IfCondition(PythonExpression(["'", controller_type, "' == 'vector'"])),
-        package='vector_pursuit_controller', node_executable='vector_pursuit_controller_server', node_name='vector_pursuit_controller_server', output='screen',
+        package='vector_pursuit_controller', node_executable='vector_pursuit_controller_server', node_name='controller_server', output='screen',
         parameters=[vector_params, {'use_sim_time': use_sim_time}])
 
 

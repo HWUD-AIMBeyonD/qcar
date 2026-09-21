@@ -73,6 +73,11 @@ protected:
   std::shared_ptr<tf2_ros::Buffer> tf_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   nav_msgs::msg::Path global_plan_;
+
+  // Debug viz -- same topic names the RPP and Stanley controllers use, so the
+  // RViz config (blue controller path + red target arrow) works unchanged.
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr local_plan_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr lookahead_pub_;
 };
 
 }  // namespace vector_pursuit_controller

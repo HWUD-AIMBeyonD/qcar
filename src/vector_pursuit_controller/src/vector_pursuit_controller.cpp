@@ -24,7 +24,7 @@ void VectorPursuitController::configure(
   // Defaults
   // k_trans: Gain for Position Error (Pure Pursuit component)
   // k_rot:   Gain for Orientation Error (Vector Alignment component)
-  node->declare_parameter(plugin_name_ + ".desired_linear_vel", rclcpp::ParameterValue(0.5));
+  node->declare_parameter(plugin_name_ + ".desired_linear_vel", rclcpp::ParameterValue(0.3));
   node->declare_parameter(plugin_name_ + ".max_angular_vel", rclcpp::ParameterValue(1.0));
   node->declare_parameter(plugin_name_ + ".lookahead_dist", rclcpp::ParameterValue(0.6));
   node->declare_parameter(plugin_name_ + ".k_trans", rclcpp::ParameterValue(1.0)); 
@@ -38,7 +38,10 @@ void VectorPursuitController::configure(
   node->get_parameter(plugin_name_ + ".k_rot", k_rot_);
   node->get_parameter(plugin_name_ + ".wheelbase", wheelbase_);
 
-  RCLCPP_INFO(node->get_logger(), 
+  local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
+  lookahead_pub_ = node->create_publisher<geometry_msgs::msg::PoseStamped>("lookahead_point", 1);
+
+  RCLCPP_INFO(node->get_logger(),
     "Vector Pursuit configured: dist=%.2f, k_trans=%.2f, k_rot=%.2f",
     lookahead_dist_, k_trans_, k_rot_);
 }
@@ -73,6 +76,7 @@ geometry_msgs::msg::TwistStamped VectorPursuitController::computeVelocityCommand
 
   // 1. Transform Global Plan to Robot Frame ("base")
   auto transformed_plan = transformGlobalPlan(pose);
+  local_plan_pub_->publish(transformed_plan);
 
   if (transformed_plan.poses.empty()) {
     RCLCPP_WARN(rclcpp::get_logger("VectorPursuitController"), 
@@ -82,6 +86,8 @@ geometry_msgs::msg::TwistStamped VectorPursuitController::computeVelocityCommand
 
   // 2. Get Lookahead Point
   geometry_msgs::msg::PoseStamped lookahead_pose = getLookAheadPoint(lookahead_dist_, transformed_plan);
+  lookahead_pose.header.frame_id = "base";
+  lookahead_pub_->publish(lookahead_pose);
 
   // 3. Vector Pursuit Calculation
   
@@ -119,15 +125,29 @@ geometry_msgs::msg::TwistStamped VectorPursuitController::computeVelocityCommand
   // 4. Clamp Steering to Limits
   delta = std::max(std::min(delta, max_angular_vel_), -max_angular_vel_);
 
-  // 5. Convert Steering Angle to Angular Velocity
-  // omega = (v / L) * tan(delta)
-  double angular_vel = (desired_linear_vel_ / wheelbase_) * std::tan(delta);
+  // 5. REGULATION: slow down on sharp curves, same thresholds as the RPP and
+  // Stanley controllers so the three are comparable. For an Ackermann vehicle
+  // the path curvature implied by the steering angle is k = tan(delta) / L.
+  double linear_vel = desired_linear_vel_;
+  double abs_curvature = std::abs(std::tan(delta) / wheelbase_);
+  if (abs_curvature > 0.5) {
+    linear_vel *= 0.5;   // Cut speed in half for sharp turns
+  } else if (abs_curvature > 0.3) {
+    linear_vel *= 0.75;  // Reduce speed moderately
+  }
 
-  cmd_vel.twist.linear.x = desired_linear_vel_;
+  // 6. Convert Steering Angle to Angular Velocity
+  // omega = (v / L) * tan(delta)
+  // Uses the regulated speed, so the hardware interface's inverse mapping
+  // atan(L*w/v) recovers the same delta we clamped above.
+  double angular_vel = (linear_vel / wheelbase_) * std::tan(delta);
+
+  cmd_vel.twist.linear.x = linear_vel;
   cmd_vel.twist.angular.z = angular_vel;
 
   RCLCPP_DEBUG(rclcpp::get_logger("VectorPursuitController"),
-    "Geom: %.3f, Ori: %.3f, Final Delta: %.3f", steering_geom, steering_orient, delta);
+    "Geom: %.3f, Ori: %.3f, Final Delta: %.3f, Curv: %.3f, Linear: %.3f",
+    steering_geom, steering_orient, delta, abs_curvature, linear_vel);
 
   return cmd_vel;
 }
@@ -157,8 +177,33 @@ nav_msgs::msg::Path VectorPursuitController::transformGlobalPlan(
       local_path.poses.push_back(local_pose);
     }
   } catch (tf2::TransformException & ex) {
-    RCLCPP_ERROR(rclcpp::get_logger("VectorPursuitController"), 
+    RCLCPP_ERROR(rclcpp::get_logger("VectorPursuitController"),
       "TF Transform failed: %s", ex.what());
+    return local_path;
+  }
+
+  // Drop the part of the path the robot has already driven past. Without
+  // this, getLookAheadPoint() returns the first pose >= lookahead away in
+  // path order -- once the robot is lookahead_dist from the path start, that
+  // is the start pose BEHIND it, so the car drives straight through the first
+  // turn. Same fix as the RPP controller.
+  size_t closest = 0;
+  double closest_dist = std::numeric_limits<double>::max();
+  for (size_t i = 0; i < local_path.poses.size(); ++i) {
+    double d = std::hypot(local_path.poses[i].pose.position.x,
+                          local_path.poses[i].pose.position.y);
+    if (d < closest_dist) {
+      closest_dist = d;
+      closest = i;
+    }
+  }
+  if (closest > 0) {
+    // Prune the stored plan too, so progress is monotonic and we never snap
+    // back to an earlier stretch that happens to pass nearby.
+    global_plan_.poses.erase(global_plan_.poses.begin(),
+                             global_plan_.poses.begin() + closest);
+    local_path.poses.erase(local_path.poses.begin(),
+                           local_path.poses.begin() + closest);
   }
 
   return local_path;
