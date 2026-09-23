@@ -83,8 +83,15 @@ controller_server:
     min_theta_velocity_threshold: 0.001
 
     FollowPath:
-      desired_linear_vel: 0.3   # matches nav2_params_rpp.yaml for fair comparison
-      max_angular_vel: 1.0
+      # Throttle is v / max_speed * 0.2, with max_speed=0.5 from
+      # run_qcar_nav_optitrack.sh, so 0.4 -> 0.16 throttle. The map saturates
+      # at v=0.5; values above that change nothing -- to go faster, raise the
+      # 0.2 cap in qcar_hardware_interface.py instead.
+      desired_linear_vel: 0.3
+      # Clamps the STEERING ANGLE in radians, despite the name. 0.5 matches the
+      # hardware clip in qcar_hardware_interface.py; at 1.0 the controller
+      # commands lock angles the car cannot reach.
+      max_angular_vel: 0.5
       lookahead_dist: 0.6
       wheelbase: 0.256
       
@@ -182,3 +189,4 @@ lifecycle_manager:
       - /navfn_planner
       - /recoveries_server
       - /bt_navigator
+

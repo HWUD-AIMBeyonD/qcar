@@ -1,0 +1,4 @@
+controller,planner,run,cte_rmse,cte_max,mission_time,linear_accel_rms,angular_accel_rms,path_efficiency
+rpp,navfn,1,0.1974,0.5534,25.62,0.5263,1.0542,1.1153
+rpp,navfn,2,0.1059,0.3283,21.30,0.6348,1.3066,1.0774
+rpp,navfn,3,0.0537,0.1747,19.00,0.6946,1.5438,1.0296

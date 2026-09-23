@@ -55,8 +55,19 @@ protected:
   
   // Re-introducing LookAhead logic (essential for Vector Pursuit)
   geometry_msgs::msg::PoseStamped getLookAheadPoint(
-    const double & lookahead_dist, 
+    const double & lookahead_dist,
     const nav_msgs::msg::Path & transformed_plan);
+
+  // Index of the lookahead pose. Needed as well as the pose itself because the
+  // orientation component reads the path heading from the NEIGHBOURING poses,
+  // not from the pose's own quaternion (navfn leaves those at identity).
+  size_t getLookAheadIndex(
+    const double & lookahead_dist,
+    const nav_msgs::msg::Path & transformed_plan);
+
+  // Heading of the path at index i, measured over a span of poses to smooth
+  // out navfn's 45-degree grid quantisation.
+  double getPathHeading(const nav_msgs::msg::Path & plan, size_t i);
 
   // Parameters
   double desired_linear_vel_;
@@ -67,7 +78,10 @@ protected:
   double wheelbase_;      // Distance between axles
 
   std::string plugin_name_;
-  
+
+  // Cycle counter used to throttle the per-cycle INFO diagnostic.
+  unsigned int debug_counter_ = 0;
+
   // ROS handles
   rclcpp::Node::WeakPtr node_;
   std::shared_ptr<tf2_ros::Buffer> tf_;
@@ -83,3 +97,4 @@ protected:
 }  // namespace vector_pursuit_controller
 
 #endif  // VECTOR_PURSUIT_CONTROLLER__VECTOR_PURSUIT_CONTROLLER_HPP_
+

@@ -1,0 +1,16 @@
+rosbag2_bagfile_information:
+  version: 1
+  storage_identifier: sqlite3
+  relative_file_paths:
+    - rpp_navfn_run4.db3
+  duration:
+    nanoseconds: 106594605024
+  starting_time:
+    nanoseconds_since_epoch: 1789990966248539840
+  message_count: 5083
+  topics_with_message_count:
+    - topic_metadata:
+        name: /odom_opti
+        type: nav_msgs/msg/Odometry
+        serialization_format: cdr
+      message_count: 5083
