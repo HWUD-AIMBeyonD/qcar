@@ -5,8 +5,8 @@ from geometry_msgs.msg import Twist
 import sys, select, termios, tty
 
 # Settings
-MAX_LINEAR_SPEED = 0.5
-MAX_ANGULAR_SPEED = 2.0  # rad/s
+MAX_LINEAR_SPEED = 0.3  # m/s - low speed for safety
+MAX_ANGULAR_SPEED = 1.0  # rad/s
 
 msg = """
 ---------------------------
@@ -17,8 +17,13 @@ MOVING:
  a   d
    s
 
+REVERSE STEERING:
+ q       e
+  \\     /
+   reverse
+
 x : Force Stop
-q : Quit
+z : Quit
 
 CTRL-C to quit
 """
@@ -55,16 +60,16 @@ def main(args=None):
     node = ManualTeleop()
 
     settings = termios.tcgetattr(sys.stdin)
-    
     linear_speed = 0.0
     angular_speed = 0.0
-    
+
     try:
         print(msg)
+        print(f"Max speed: {MAX_LINEAR_SPEED} m/s")
+
         while rclpy.ok():
             key = get_key(settings)
-            
-            # Logic for WASD
+
             if key == 'w':
                 linear_speed = MAX_LINEAR_SPEED
                 angular_speed = 0.0
@@ -72,20 +77,23 @@ def main(args=None):
                 linear_speed = -MAX_LINEAR_SPEED
                 angular_speed = 0.0
             elif key == 'a':
-                linear_speed = MAX_LINEAR_SPEED * 0.5 # Add forward motion to turn
+                linear_speed = MAX_LINEAR_SPEED * 0.5
                 angular_speed = MAX_ANGULAR_SPEED
             elif key == 'd':
                 linear_speed = MAX_LINEAR_SPEED * 0.5
                 angular_speed = -MAX_ANGULAR_SPEED
+            elif key == 'q':
+                linear_speed = -MAX_LINEAR_SPEED * 0.5
+                angular_speed = MAX_ANGULAR_SPEED
+            elif key == 'e':
+                linear_speed = -MAX_LINEAR_SPEED * 0.5
+                angular_speed = -MAX_ANGULAR_SPEED
             elif key == 'x':
                 linear_speed = 0.0
                 angular_speed = 0.0
-            elif key == 'q':
-                break
-            elif key == '\x03': # Ctrl-C
+            elif key == 'z' or key == '\x03':
                 break
             else:
-                # Decelerate if no key is pressed (Deadman switch feel)
                 linear_speed = 0.0
                 angular_speed = 0.0
 
@@ -103,3 +111,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+

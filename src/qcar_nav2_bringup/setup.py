@@ -39,6 +39,11 @@ setup(
     entry_points={
         'console_scripts': [
             'qcar_hardware_interface = qcar_nav2_bringup.qcar_hardware_interface:main',
+            'map_republisher = qcar_nav2_bringup.map_republisher:main',
+            'direct_map_publisher = qcar_nav2_bringup.direct_map_publisher:main',
+            'send_nav_goal = qcar_nav2_bringup.send_nav_goal:main',
+            'path_visualizer = qcar_nav2_bringup.path_visualizer:main',
         ],
     },
 )
+

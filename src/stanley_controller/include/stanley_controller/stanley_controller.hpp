@@ -1,5 +1,5 @@
-#ifndef RPP_CONTROLLER__REGULATED_PURE_PURSUIT_CONTROLLER_HPP_
-#define RPP_CONTROLLER__REGULATED_PURE_PURSUIT_CONTROLLER_HPP_
+#ifndef STANLEY_CONTROLLER__STANLEY_CONTROLLER_HPP_
+#define STANLEY_CONTROLLER__STANLEY_CONTROLLER_HPP_
 
 #include <string>
 #include <vector>
@@ -18,18 +18,18 @@
 #include "nav_msgs/msg/path.hpp"
 #include "tf2_ros/buffer.h"
 
-namespace rpp_controller
+namespace stanley_controller
 {
 
 /**
- * @class RegulatedPurePursuitController
- * @brief Regulated Pure Pursuit Controller plugin for Nav2 (ROS 2 Dashing)
+ * @class StanleyController
+ * @brief Stanley Controller plugin for Nav2 (ROS 2 Dashing)
  */
-class RegulatedPurePursuitController : public nav2_core::Controller
+class StanleyController : public nav2_core::Controller
 {
 public:
-  RegulatedPurePursuitController() = default;
-  ~RegulatedPurePursuitController() override = default;
+  StanleyController() = default;
+  ~StanleyController() override = default;
 
   // Nav2 Controller interface (Dashing API)
   void configure(
@@ -52,20 +52,11 @@ protected:
   // Helper functions
   nav_msgs::msg::Path transformGlobalPlan(const geometry_msgs::msg::PoseStamped & pose);
   
-  geometry_msgs::msg::PoseStamped getLookAheadPoint(
-    const double & lookahead_dist, 
-    const nav_msgs::msg::Path & transformed_plan);
-  
-  double getLookAheadDistance(const geometry_msgs::msg::Twist & speed);
-
   // Parameters
   double desired_linear_vel_;
-  double lookahead_dist_;
   double max_angular_vel_;
-  double min_lookahead_dist_;
-  double max_lookahead_dist_;
-  double lookahead_time_;
-  bool use_velocity_scaled_lookahead_dist_;
+  double k_gain_;       // Stanley control gain
+  double wheelbase_;    // Distance from rear axle to front axle (meters)
 
   std::string plugin_name_;
   
@@ -75,12 +66,12 @@ protected:
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   nav_msgs::msg::Path global_plan_;
 
-  // Debug visualisation for RViz: the plan as the controller sees it (in the
-  // base frame) and the point it is currently steering towards.
+  // Debug viz -- same topic names the RPP controller uses, so the RViz config
+  // (blue controller path + red target arrow) works unchanged for Stanley.
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr local_plan_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr lookahead_pub_;
 };
 
-}  // namespace rpp_controller
+}  // namespace stanley_controller
 
-#endif  // RPP_CONTROLLER__REGULATED_PURE_PURSUIT_CONTROLLER_HPP_
+#endif  // STANLEY_CONTROLLER__STANLEY_CONTROLLER_HPP_

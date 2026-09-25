@@ -3,6 +3,7 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include <cmath>
 #include <chrono>
+#include <limits>
 
 namespace rpp_controller
 {
@@ -36,6 +37,9 @@ void RegulatedPurePursuitController::configure(
   node->get_parameter(plugin_name_ + ".min_lookahead_dist", min_lookahead_dist_);
   node->get_parameter(plugin_name_ + ".max_lookahead_dist", max_lookahead_dist_);
   node->get_parameter(plugin_name_ + ".use_velocity_scaled_lookahead_dist", use_velocity_scaled_lookahead_dist_);
+
+  local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
+  lookahead_pub_ = node->create_publisher<geometry_msgs::msg::PoseStamped>("lookahead_point", 1);
 
   RCLCPP_INFO(node->get_logger(), 
     "Regulated Pure Pursuit controller configured: desired_vel=%.2f, lookahead=%.2f",
@@ -74,7 +78,8 @@ geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocity
 
   // 1. Transform global plan to robot frame
   auto transformed_plan = transformGlobalPlan(pose);
-  
+  local_plan_pub_->publish(transformed_plan);
+
   if (transformed_plan.poses.empty()) {
     RCLCPP_WARN(rclcpp::get_logger("RegulatedPurePursuitController"), 
       "Transformed plan is empty, stopping robot");
@@ -86,6 +91,8 @@ geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocity
 
   // 3. Find the lookahead point on the path
   auto lookahead_pose = getLookAheadPoint(lookahead, transformed_plan);
+  lookahead_pose.header.frame_id = "base";
+  lookahead_pub_->publish(lookahead_pose);
 
   // 4. Pure Pursuit math: calculate curvature
   // The lookahead point is in robot frame (x=forward, y=left)
@@ -156,9 +163,33 @@ nav_msgs::msg::Path RegulatedPurePursuitController::transformGlobalPlan(
       local_path.poses.push_back(local_pose);
     }
   } catch (tf2::TransformException & ex) {
-    RCLCPP_ERROR(rclcpp::get_logger("RegulatedPurePursuitController"), 
+    RCLCPP_ERROR(rclcpp::get_logger("RegulatedPurePursuitController"),
       "TF Transform failed: %s", ex.what());
     return local_path;
+  }
+
+  // Drop the part of the path the robot has already driven past. Without
+  // this, getLookAheadPoint() returns the first pose >= lookahead away in
+  // path order -- once the robot is lookahead_dist from the path start, that
+  // is the start pose BEHIND it, so curvature ~ 0 and the car drives straight
+  // through the first turn.
+  size_t closest = 0;
+  double closest_dist = std::numeric_limits<double>::max();
+  for (size_t i = 0; i < local_path.poses.size(); ++i) {
+    double d = std::hypot(local_path.poses[i].pose.position.x,
+                          local_path.poses[i].pose.position.y);
+    if (d < closest_dist) {
+      closest_dist = d;
+      closest = i;
+    }
+  }
+  if (closest > 0) {
+    // Prune the stored plan too, so progress is monotonic and we never snap
+    // back to an earlier stretch that happens to pass nearby.
+    global_plan_.poses.erase(global_plan_.poses.begin(),
+                             global_plan_.poses.begin() + closest);
+    local_path.poses.erase(local_path.poses.begin(),
+                           local_path.poses.begin() + closest);
   }
 
   return local_path;

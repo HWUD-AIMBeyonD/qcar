@@ -1,0 +1,7 @@
+<library path="stanley_controller">
+  <class type="stanley_controller::StanleyController" base_class_type="nav2_core::Controller">
+    <description>
+      Stanley controller plugin for Ackermann vehicles (QCar)
+    </description>
+  </class>
+</library>

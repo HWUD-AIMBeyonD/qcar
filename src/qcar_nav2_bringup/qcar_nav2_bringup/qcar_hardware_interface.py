@@ -6,7 +6,7 @@ sys.path.insert(0, '/home/nvidia/Core Modules/Python/Quanser')
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import LaserScan, PointCloud
+from sensor_msgs.msg import LaserScan, PointCloud, Imu
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Point32
 from std_msgs.msg import Header
@@ -17,7 +17,6 @@ from tf2_msgs.msg import TFMessage
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 # Import QCar hardware
-#
 from Quanser.product_QCar import QCar
 
 # Import LIDAR
@@ -38,12 +37,16 @@ class QCarHardwareInterface(Node):
         # Declare parameters
         self.declare_parameter('max_speed', 0.5)
         self.declare_parameter('max_steering_angle', 0.5)
+        # set false when another source (e.g. http_odom_node with OptiTrack)
+        # owns the odom -> base transform
+        self.declare_parameter('publish_odom_tf', True)
         self.max_speed = self.get_parameter('max_speed').value
         self.max_steering = self.get_parameter('max_steering_angle').value
+        self.publish_odom_tf = self.get_parameter('publish_odom_tf').value
 
         # Initialize QCar hardware ONCE
         try:
-            self.qcar = QCar() #
+            self.qcar = QCar() 
             self.get_logger().info('✓ QCar hardware initialized')
         except Exception as e:
             self.get_logger().error(f'Failed to initialize QCar: {str(e)}')
@@ -79,7 +82,11 @@ class QCarHardwareInterface(Node):
         # Other publishers
         self.scan_publisher = self.create_publisher(LaserScan, '/scan', 10)
         self.pointcloud_publisher = self.create_publisher(PointCloud, '/pointcloud', 10)
-        self.odom_publisher = self.create_publisher(Odometry, '/odom', 10)
+        # --- COMMENTED OUT: using OptiTrack odom instead ---
+        # self.odom_publisher = self.create_publisher(Odometry, '/odom_raw', 10)
+        
+        # --- IMU PUBLISHER ---
+        self.imu_publisher = self.create_publisher(Imu, '/imu', 10)
 
         # Subscriber for motor commands
         self.cmd_vel_sub = self.create_subscription(
@@ -90,11 +97,11 @@ class QCarHardwareInterface(Node):
         )
 
         # ----------------------------------------
-        # UPDATED: Hardware Constants & States
+        # Hardware Constants & States
         # ----------------------------------------
-        self.wheel_radius = 0.033  # meters (Updated from 0.034 per Manual Table 11)
-        self.wheel_base = 0.256    # meters
-        self.encoder_counts_per_rev = 2880  # quadrature
+        self.wheel_radius = 0.033  
+        self.wheel_base = 0.256     
+        self.encoder_counts_per_rev = 28800  
         self.x = 0.0
         self.y = 0.0
         self.theta = 0.0
@@ -103,28 +110,24 @@ class QCarHardwareInterface(Node):
 
         # Motor command state
         self.current_throttle = 0.0
-        
-        # Steering Logic with Lag
-        self.target_steering = 0.0   # The desired steering from cmd_vel (radians)
-        self.current_steering = 0.0  # The actual filtered steering sent to motors (radians)
-        self.steering_tau = 0.16     # Filter Time Constant (0.16s)
+        self.target_steering = 0.0  
+        self.current_steering = 0.0 
+        self.steering_tau = 0.16     
         
         self.last_cmd_time = self.get_clock().now()
         self.cmd_timeout = rclpy.duration.Duration(seconds=1.0)
-
-        # QCar max physical steering angle is approximately ±30 degrees (±0.5236 rad)
-        # The QCar API saturates at 0.5 rad
-        self.max_physical_steering_angle = 0.5236 
         
-        # Computed angular velocity (for odometry feedback)
         self.computed_angular_velocity = 0.0
 
         # Main control loop (50 Hz -> dt = 0.02s)
         self.timer = self.create_timer(0.02, self.control_loop)
 
-        self.get_logger().info('✓ QCar Hardware Interface ready (Nav2-compatible odometry)')
-        self.get_logger().info(f'  Wheel Radius: {self.wheel_radius}m (Updated)')
-        self.get_logger().info(f'  Steering: Direct Radians + 0.16s Lag Filter')
+        # LIDAR loop (10 Hz - matches RPLiDAR A2 hardware rotation)
+        self.lidar_timer = self.create_timer(0.1, self.lidar_loop)
+
+        self.get_logger().info('✓ QCar Hardware Interface ready')
+        self.get_logger().info('  /odom_raw - Wheel encoder odometry')
+        self.get_logger().info('  /imu - IMU data')
 
     def cmd_vel_callback(self, msg):
         self.last_cmd_time = self.get_clock().now()
@@ -132,75 +135,96 @@ class QCarHardwareInterface(Node):
         linear_vel = msg.linear.x
         angular_vel = msg.angular.z
 
-        # Throttle command (simple scaling)
-        # Note: product_QCar saturates internally at +/- 0.2
+        # Throttle command
         self.current_throttle = np.clip(linear_vel / self.max_speed * 0.2, -0.2, 0.2)
 
-        # ----------------------------------------
-        # UPDATED: Direct Radian Calculation
-        # ----------------------------------------
-        # 1. Compute required steering angle (radians) from bicycle model
+        # Steering command
         steering_angle_rad = self.compute_steering_from_angular_velocity(linear_vel, angular_vel)
-        
-        # 2. Clip to hardware limits (0.5 rad is QCar API limit)
-        # We do NOT normalize to [-0.5, 0.5] anymore. We send radians.
         self.target_steering = np.clip(steering_angle_rad, -0.5, 0.5)
 
     def control_loop(self):
         try:
             current_time = self.get_clock().now()
-            dt = 0.02 # Fixed timer period
+            dt = 0.02 
 
             time_since_cmd = current_time - self.last_cmd_time
             if time_since_cmd > self.cmd_timeout:
                 self.current_throttle = 0.0
                 self.target_steering = 0.0
 
-            # ----------------------------------------
-            # UPDATED: Steering Lag Filter (First Order)
-            # ----------------------------------------
-            # y[n] = alpha * x[n] + (1 - alpha) * y[n-1]
-            # alpha = dt / (tau + dt)
+            # Steering Lag Filter
             alpha = dt / (self.steering_tau + dt)
-            
             self.current_steering = (alpha * self.target_steering) + ((1.0 - alpha) * self.current_steering)
 
-            # Send to Hardware (Direct Radians)
+            # Send to Hardware
             mtr_cmd = np.array([self.current_throttle, self.current_steering])
             LEDs = np.zeros(8, dtype=int)
             
-            # read_write_std returns (current, voltage, encoder_counts)
+            # Read Basic Sensors (Current, Voltage, Encoders)
             motor_current, battery_voltage, encoder_count = self.qcar.read_write_std(mtr_cmd, LEDs)
 
-            # Update odom + publish TF first
-            self.update_odometry(current_time, encoder_count)
+            # --- Read IMU Data (with workaround for Core Modules bug) ---
+            try:
+                self.qcar.read_IMU()
+                gyro = self.qcar.read_other_buffer_IMU[0:3]
+                accel = self.qcar.read_other_buffer_IMU[3:6]
+                self.publish_imu(current_time, gyro, accel)
+            except Exception as e:
+                pass
 
-            # Then lidar
-            if self.lidar is not None:
-                try:
-                    self.lidar.read()
-                    self.publish_laserscan(current_time)
-                    self.publish_pointcloud(current_time)
-                except Exception as e:
-                    self.get_logger().error(f'LIDAR read error: {str(e)}', throttle_duration_sec=5.0)
+            # --- COMMENTED OUT: using OptiTrack odom instead ---
+            # self.update_odometry(current_time, encoder_count)
 
         except Exception as e:
             self.get_logger().error(f'Control loop error: {str(e)}')
 
+    def lidar_loop(self):
+        """Read and publish LIDAR at 10Hz (matches RPLiDAR A2 rotation rate)."""
+        if self.lidar is not None:
+            try:
+                self.lidar.read()
+                n = np.array(self.lidar.distances).flatten().size
+                # Only publish if we got a reasonably full scan
+                if n > 200:
+                    current_time = self.get_clock().now()
+                    self.publish_laserscan(current_time)
+                    self.publish_pointcloud(current_time)
+            except Exception as e:
+                self.get_logger().error(f'LIDAR error: {e}', throttle_duration_sec=5.0)
+
+    def publish_imu(self, current_time, gyro, accel):
+        imu_msg = Imu()
+        imu_msg.header.stamp = current_time.to_msg()
+        imu_msg.header.frame_id = 'imu_link'
+
+        imu_msg.orientation.x = 0.0
+        imu_msg.orientation.y = 0.0
+        imu_msg.orientation.z = 0.0
+        imu_msg.orientation.w = 1.0
+        imu_msg.orientation_covariance[0] = -1
+
+        imu_msg.angular_velocity.x = float(gyro[0])
+        imu_msg.angular_velocity.y = float(gyro[1])
+        imu_msg.angular_velocity.z = float(gyro[2])
+        imu_msg.angular_velocity_covariance[0] = 0.01
+        imu_msg.angular_velocity_covariance[4] = 0.01
+        imu_msg.angular_velocity_covariance[8] = 0.01
+
+        imu_msg.linear_acceleration.x = float(accel[0])
+        imu_msg.linear_acceleration.y = float(accel[1])
+        imu_msg.linear_acceleration.z = float(accel[2])
+        imu_msg.linear_acceleration_covariance[0] = 0.1
+        imu_msg.linear_acceleration_covariance[4] = 0.1
+        imu_msg.linear_acceleration_covariance[8] = 0.1
+
+        self.imu_publisher.publish(imu_msg)
+
     def compute_steering_from_angular_velocity(self, linear_velocity, desired_angular_velocity):
-        """
-        Convert desired angular velocity to required steering angle (Radians).
-        """
-        # Handle stationary rotation or very slow speeds
         if abs(linear_velocity) < 0.05:
             if abs(desired_angular_velocity) > 0.01:
-                # Return max steering in direction of rotation (Radians)
                 return np.sign(desired_angular_velocity) * 0.5
             else:
                 return 0.0
-        
-        # Normal case: compute steering angle from bicycle model
-        # δ = atan((L * ω) / v)
         try:
             steering_angle = math.atan((self.wheel_base * desired_angular_velocity) / linear_velocity)
             return steering_angle
@@ -208,19 +232,10 @@ class QCarHardwareInterface(Node):
             return 0.0
 
     def compute_angular_velocity_from_steering(self, linear_velocity, steering_command_rad):
-        """
-        Compute angular velocity using bicycle/Ackermann steering model.
-        Args:
-            steering_command_rad: Steering angle in RADIANS
-        """
-        # Prevent division by zero and handle small velocities
         if abs(linear_velocity) < 0.001:
             return 0.0
-        
-        # Bicycle model: ω = (v / L) * tan(δ)
         try:
             angular_velocity = (linear_velocity / self.wheel_base) * math.tan(steering_command_rad)
-            # Sanity check limit
             return np.clip(angular_velocity, -4.0, 4.0)
         except:
             return 0.0
@@ -230,36 +245,28 @@ class QCarHardwareInterface(Node):
         if dt <= 0:
             return
 
-        # Compute linear velocity from wheel encoders
         delta_encoder = encoder_count - self.last_encoder_count
         encoder_speed = delta_encoder / dt
 
         wheel_angular_velocity = (encoder_speed / self.encoder_counts_per_rev) * 2.0 * math.pi
         linear_velocity = wheel_angular_velocity * self.wheel_radius
 
-        # Compute angular velocity from steering using bicycle model
-        # Pass the FILTERED current steering (in radians)
         angular_velocity = self.compute_angular_velocity_from_steering(
-            linear_velocity, 
-            self.current_steering 
+            linear_velocity,
+            self.current_steering
         )
-        
-        # Store for feedback
+
         self.computed_angular_velocity = angular_velocity
 
-        # Dead reckoning integration
         delta_s = linear_velocity * dt
         delta_theta = angular_velocity * dt
 
         self.theta += delta_theta
-        # Normalize theta to [-pi, pi]
         self.theta = math.atan2(math.sin(self.theta), math.cos(self.theta))
-        
+
         self.x += delta_s * math.cos(self.theta)
         self.y += delta_s * math.sin(self.theta)
 
-        # Publish TF + odom
-        self.publish_tf(current_time)
         self.publish_odometry(current_time, linear_velocity, angular_velocity)
 
         self.last_encoder_count = encoder_count
@@ -279,28 +286,54 @@ class QCarHardwareInterface(Node):
         if ranges.size > 0 and np.nanmax(ranges) > 50.0:
             ranges = ranges / 1000.0
 
-        ranges = np.where(
-            (~np.isfinite(ranges)) |
-            (ranges < scan_msg.range_min) |
-            (ranges > scan_msg.range_max),
-            np.inf,
-            ranges
-        )
+        angles = np.array(self.lidar.angles).flatten().astype(np.float32)
 
         n = int(ranges.size)
-        if n <= 1:
+        if n <= 1 or angles.size != n:
             return
 
-        scan_msg.angle_min = 0.0
-        scan_msg.angle_max = 2.0 * math.pi
-        scan_msg.angle_increment = (2.0 * math.pi) / n
+        # Negate angles (same convention as pointcloud)
+        neg_angles = -angles
+
+         #Wrap to [0, 2π] range
+        neg_angles = neg_angles % (2.0 * math.pi)
+        
+        # Create uniform angle grid
+        a_min = float(np.min(neg_angles))
+        a_max = float(np.max(neg_angles))
+        uniform_angles = np.linspace(a_min, a_max, n)
+
+        # Resample ranges onto uniform grid via interpolation
+        # Sort by angle first (required for np.interp)
+        sort_idx = np.argsort(neg_angles)
+        sorted_angles = neg_angles[sort_idx]
+        sorted_ranges = ranges[sort_idx]
+
+        # Only interpolate valid (finite) ranges
+        valid = np.isfinite(sorted_ranges)
+        if np.sum(valid) < 10:
+            return
+
+        uniform_ranges = np.interp(uniform_angles, sorted_angles[valid], sorted_ranges[valid])
+
+        # Re-apply range filtering
+        uniform_ranges = np.where(
+            (uniform_ranges < scan_msg.range_min) |
+            (uniform_ranges > scan_msg.range_max),
+            np.inf,
+            uniform_ranges
+        )
+
+        scan_msg.angle_min = a_min
+        scan_msg.angle_max = a_max
+        scan_msg.angle_increment = float((a_max - a_min) / (n - 1))
         scan_msg.time_increment = 0.0
-        scan_msg.scan_time = 0.033
-        scan_msg.ranges = ranges.tolist()
+        scan_msg.scan_time = 0.1
+        scan_msg.ranges = uniform_ranges.tolist()
         scan_msg.intensities = []
 
         self.scan_publisher.publish(scan_msg)
-
+        
     def publish_pointcloud(self, current_time):
         pc_msg = PointCloud()
         pc_msg.header = Header()
@@ -321,8 +354,8 @@ class QCarHardwareInterface(Node):
             if not np.isfinite(r) or r < 0.15 or r > 12.0:
                 continue
             pt = Point32()
-            pt.x = float(r * math.cos(float(a)))
-            pt.y = float(r * math.sin(float(a)))
+            pt.x = float(r * math.cos(float(-a)))
+            pt.y = float(r * math.sin(float(-a)))
             pt.z = 0.0
             points.append(pt)
 
@@ -353,15 +386,14 @@ class QCarHardwareInterface(Node):
         odom_msg.twist.twist.angular.y = 0.0
         odom_msg.twist.twist.angular.z = angular_vel
 
-        # Covariance matrices
         odom_msg.pose.covariance = [0.0] * 36
-        odom_msg.pose.covariance[0] = 0.01   # x variance
-        odom_msg.pose.covariance[7] = 0.01   # y variance
-        odom_msg.pose.covariance[35] = 0.05  # yaw variance
+        odom_msg.pose.covariance[0] = 0.1
+        odom_msg.pose.covariance[7] = 0.1
+        odom_msg.pose.covariance[35] = 1.0
 
         odom_msg.twist.covariance = [0.0] * 36
-        odom_msg.twist.covariance[0] = 0.01   # linear x
-        odom_msg.twist.covariance[35] = 0.05  # angular z
+        odom_msg.twist.covariance[0] = 0.1
+        odom_msg.twist.covariance[35] = 1.0
 
         self.odom_publisher.publish(odom_msg)
 
@@ -380,6 +412,9 @@ class QCarHardwareInterface(Node):
         return [qx, qy, qz, qw]
 
     def publish_tf(self, current_time):
+        if not self.publish_odom_tf:
+            return
+
         t = TransformStamped()
         t.header.stamp = current_time.to_msg()
         t.header.frame_id = 'odom'
@@ -437,3 +472,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
