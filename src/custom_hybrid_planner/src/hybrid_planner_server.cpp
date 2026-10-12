@@ -58,6 +58,10 @@ public:
         planner_->configure(shared_from_this(), "GridBased", tf_buffer_, costmap_ros_);
         planner_->activate();
 
+        // The action result is the only other place the path goes; /plan is
+        // what RViz and compute_kpis_hw.py read (navfn_planner published it).
+        plan_pub_ = create_publisher<nav_msgs::msg::Path>("/plan", 1);
+
         // 6. Create Action Server only after all dependencies are active
         action_server_ = rclcpp_action::create_server<Action>(
             this->get_node_base_interface(),
@@ -120,6 +124,7 @@ private:
 
         // 2. Call the Planner Logic
         nav_msgs::msg::Path path;
+        const auto t0 = std::chrono::steady_clock::now();
         try {
             path = planner_->createPlan(start, goal->pose);
         } catch (const std::exception & e) {
@@ -127,13 +132,16 @@ private:
             goal_handle->abort(result);
             return;
         }
+        const double plan_ms = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
 
         // 3. Check for empty path (failure to find a route)
         if(path.poses.empty()) {
-             RCLCPP_WARN(get_logger(), "Planner could not find a valid path.");
+             RCLCPP_WARN(get_logger(), "Planner could not find a valid path (%.1f ms).", plan_ms);
              goal_handle->abort(result);
              return;
         }
+        RCLCPP_INFO(get_logger(), "Planning time: %.1f ms", plan_ms);
 
         // 4. Convert nav_msgs/Path to nav2_msgs/Path (Dashing specific format)
         result->path.header = path.header;
@@ -141,6 +149,7 @@ private:
             result->path.poses.push_back(stamped_pose.pose);
         }
 
+        plan_pub_->publish(path);
         goal_handle->succeed(result);
         RCLCPP_INFO(get_logger(), "Path successfully sent to BT Navigator.");
     }
@@ -151,6 +160,7 @@ private:
     std::thread costmap_thread_;  // ⭐ FIX: Added this member variable
     std::shared_ptr<custom_hybrid_planner::HybridPlanner> planner_;
     typename rclcpp_action::Server<Action>::SharedPtr action_server_;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr plan_pub_;
 };
 
 int main(int argc, char ** argv)
