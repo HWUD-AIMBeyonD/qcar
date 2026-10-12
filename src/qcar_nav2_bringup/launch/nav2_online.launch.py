@@ -45,9 +45,11 @@ def generate_launch_description():
     # The hybrid planner server and the controller server are NOT lifecycle
     # nodes -- they start on their own and are deliberately left out of the
     # lifecycle manager's node_names below.
+    # No standalone /global_costmap/costmap or /world_model: they were navfn's
+    # (main branch). The hybrid planner has its own costmap, and a second node
+    # named /global_costmap/costmap left the lifecycle manager stuck before it
+    # ever reached bt_navigator.
     lifecycle_nodes = [
-        '/global_costmap/costmap',
-        '/world_model',
         '/recoveries_server',
         '/bt_navigator',
     ]
@@ -56,16 +58,6 @@ def generate_launch_description():
     # NODES (RPP SET) - Condition: controller_type == 'rpp'
     # ========================================================================
     cond_rpp = IfCondition(PythonExpression(["'", controller_type, "' == 'rpp'"]))
-
-    global_costmap_rpp = Node(
-        condition=cond_rpp,
-        package='nav2_costmap_2d', node_executable='nav2_costmap_2d', node_name='costmap', node_namespace='global_costmap', output='screen',
-        parameters=[rpp_params, {'use_sim_time': use_sim_time}])
-
-    world_model_rpp = Node(
-        condition=cond_rpp,
-        package='nav2_world_model', node_executable='world_model', node_name='world_model', output='screen',
-        parameters=[rpp_params, {'use_sim_time': use_sim_time}, {'costmap_topic': '/global_costmap/costmap_raw'}, {'footprint_topic': '/global_costmap/published_footprint'}])
 
     planner_rpp = Node(
         condition=cond_rpp,
@@ -98,16 +90,6 @@ def generate_launch_description():
     # ========================================================================
     cond_stanley = IfCondition(PythonExpression(["'", controller_type, "' == 'stanley'"]))
 
-    global_costmap_stanley = Node(
-        condition=cond_stanley,
-        package='nav2_costmap_2d', node_executable='nav2_costmap_2d', node_name='costmap', node_namespace='global_costmap', output='screen',
-        parameters=[stanley_params, {'use_sim_time': use_sim_time}])
-
-    world_model_stanley = Node(
-        condition=cond_stanley,
-        package='nav2_world_model', node_executable='world_model', node_name='world_model', output='screen',
-        parameters=[stanley_params, {'use_sim_time': use_sim_time}, {'costmap_topic': '/global_costmap/costmap_raw'}, {'footprint_topic': '/global_costmap/published_footprint'}])
-
     planner_stanley = Node(
         condition=cond_stanley,
         package='custom_hybrid_planner', node_executable='hybrid_planner_server', node_name='hybrid_planner_server', output='screen',
@@ -139,16 +121,6 @@ def generate_launch_description():
     # ========================================================================
     cond_vector = IfCondition(PythonExpression(["'", controller_type, "' == 'vector'"]))
 
-    global_costmap_vector = Node(
-        condition=cond_vector,
-        package='nav2_costmap_2d', node_executable='nav2_costmap_2d', node_name='costmap', node_namespace='global_costmap', output='screen',
-        parameters=[vector_params, {'use_sim_time': use_sim_time}])
-
-    world_model_vector = Node(
-        condition=cond_vector,
-        package='nav2_world_model', node_executable='world_model', node_name='world_model', output='screen',
-        parameters=[vector_params, {'use_sim_time': use_sim_time}, {'costmap_topic': '/global_costmap/costmap_raw'}, {'footprint_topic': '/global_costmap/published_footprint'}])
-
     planner_vector = Node(
         condition=cond_vector,
         package='custom_hybrid_planner', node_executable='hybrid_planner_server', node_name='hybrid_planner_server', output='screen',
@@ -179,9 +151,9 @@ def generate_launch_description():
         declare_use_sim_time,
         declare_controller_type,
         # RPP Nodes
-        global_costmap_rpp, world_model_rpp, planner_rpp, recoveries_rpp, bt_rpp, lifecycle_rpp, rpp_server,
+        planner_rpp, recoveries_rpp, bt_rpp, lifecycle_rpp, rpp_server,
         # Stanley Nodes
-        global_costmap_stanley, world_model_stanley, planner_stanley, recoveries_stanley, bt_stanley, lifecycle_stanley, stanley_server,
+        planner_stanley, recoveries_stanley, bt_stanley, lifecycle_stanley, stanley_server,
         # Vector Pursuit Nodes
-        global_costmap_vector, world_model_vector, planner_vector, recoveries_vector, bt_vector, lifecycle_vector, vector_server
+        planner_vector, recoveries_vector, bt_vector, lifecycle_vector, vector_server
     ])
