@@ -26,8 +26,11 @@ setup(
         # Install behavior trees (optional, but standard for Nav2)
         (os.path.join('share', package_name, 'behavior_trees'), glob('behavior_trees/*')),
 
-        # Install scripts (helper bash scripts)
-        (os.path.join('share', package_name, 'scripts'), glob('scripts/*')),
+        # Install scripts (helper bash scripts). Files only: running the
+        # Python helpers leaves a scripts/__pycache__/ dir that setuptools
+        # cannot copy ("doesn't exist or not a regular file").
+        (os.path.join('share', package_name, 'scripts'),
+            [f for f in glob('scripts/*') if os.path.isfile(f)]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -46,4 +49,5 @@ setup(
         ],
     },
 )
+
 

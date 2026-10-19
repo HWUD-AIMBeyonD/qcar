@@ -134,7 +134,7 @@ controller_server:
       # run_qcar_nav_optitrack.sh, so 0.4 -> 0.16 throttle. The map saturates
       # at v=0.5; values above that change nothing -- to go faster, raise the
       # 0.2 cap in qcar_hardware_interface.py instead.
-      desired_linear_vel: 0.3
+      desired_linear_vel: 0.35
       # Clamps the STEERING ANGLE in radians, despite the name. 0.5 matches the
       # hardware clip in qcar_hardware_interface.py; at 1.0 the controller
       # commands lock angles the car cannot reach.

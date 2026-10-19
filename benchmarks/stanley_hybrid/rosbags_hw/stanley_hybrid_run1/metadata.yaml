@@ -1,0 +1,51 @@
+rosbag2_bagfile_information:
+  version: 1
+  storage_identifier: sqlite3
+  relative_file_paths:
+    - stanley_hybrid_run1.db3
+  duration:
+    nanoseconds: 70866567700
+  starting_time:
+    nanoseconds_since_epoch: 1792416683808197595
+  message_count: 8041
+  topics_with_message_count:
+    - topic_metadata:
+        name: /cmd_vel
+        type: geometry_msgs/msg/Twist
+        serialization_format: cdr
+      message_count: 744
+    - topic_metadata:
+        name: /controller_timing
+        type: std_msgs/msg/Float64MultiArray
+        serialization_format: cdr
+      message_count: 743
+    - topic_metadata:
+        name: /odom_opti
+        type: nav_msgs/msg/Odometry
+        serialization_format: cdr
+      message_count: 3209
+    - topic_metadata:
+        name: /odom_opti_stats
+        type: std_msgs/msg/Float64MultiArray
+        serialization_format: cdr
+      message_count: 3194
+    - topic_metadata:
+        name: /plan
+        type: nav_msgs/msg/Path
+        serialization_format: cdr
+      message_count: 1
+    - topic_metadata:
+        name: /planner_timing
+        type: std_msgs/msg/Float64MultiArray
+        serialization_format: cdr
+      message_count: 1
+    - topic_metadata:
+        name: /rosout
+        type: rcl_interfaces/msg/Log
+        serialization_format: cdr
+      message_count: 6
+    - topic_metadata:
+        name: /system_stats
+        type: std_msgs/msg/String
+        serialization_format: cdr
+      message_count: 143
