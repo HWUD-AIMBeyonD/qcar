@@ -44,6 +44,14 @@ void RegulatedPurePursuitController::configure(
   RCLCPP_INFO(node->get_logger(), 
     "Regulated Pure Pursuit controller configured: desired_vel=%.2f, lookahead=%.2f",
     desired_linear_vel_, lookahead_dist_);
+  RCLCPP_INFO(node->get_logger(),
+    "Loaded params: %s.desired_linear_vel=%.3f %s.lookahead_dist=%.3f %s.max_angular_vel=%.3f "
+    "%s.lookahead_time=%.3f %s.min_lookahead_dist=%.3f %s.max_lookahead_dist=%.3f "
+    "%s.use_velocity_scaled_lookahead_dist=%s",
+    plugin_name_.c_str(), desired_linear_vel_, plugin_name_.c_str(), lookahead_dist_,
+    plugin_name_.c_str(), max_angular_vel_, plugin_name_.c_str(), lookahead_time_,
+    plugin_name_.c_str(), min_lookahead_dist_, plugin_name_.c_str(), max_lookahead_dist_,
+    plugin_name_.c_str(), use_velocity_scaled_lookahead_dist_ ? "true" : "false");
 }
 
 void RegulatedPurePursuitController::activate() 

@@ -16,7 +16,7 @@
 # Usage:
 #   bash run_qcar_nav_optitrack.sh              # defaults to RPP
 #   bash run_qcar_nav_optitrack.sh stanley      # use Stanley controller
-#   bash run_qcar_nav_optitrack.sh vector       # use Vector Pursuit
+#   bash run_qcar_nav_optitrack.sh vector       # use Vector Pursuit (alias: vpc)
 #
 # Prerequisites:
 #   - QCar connected to OptiTrack WiFi (192.168.0.x network)
@@ -29,6 +29,8 @@
 # handle is already free, and under `set -e` that would abort the whole script.
 
 CONTROLLER_TYPE="${1:-rpp}"
+# vpc is the benchmark label for Vector Pursuit; the launch file calls it vector
+[ "$CONTROLLER_TYPE" = "vpc" ] && CONTROLLER_TYPE="vector"
 
 # map -> odom offset. The correct constant for new_map is baked into
 # localization_optitrack.launch.py as the arg defaults; these env vars only

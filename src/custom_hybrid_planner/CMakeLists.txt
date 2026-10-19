@@ -22,6 +22,7 @@ find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(std_msgs REQUIRED)
 #find_package(nav2_core REQUIRED) 
 
 set(dependencies
@@ -36,6 +37,7 @@ set(dependencies
   geometry_msgs
   pluginlib
   builtin_interfaces
+  std_msgs
  # nav2_core
 )
 

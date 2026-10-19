@@ -22,6 +22,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
+find_package(std_msgs REQUIRED)
 
 set(dependencies
   rclcpp
@@ -34,6 +35,7 @@ set(dependencies
   nav_msgs
   geometry_msgs
   pluginlib
+  std_msgs
 )
 
 # 1. Build the controller library

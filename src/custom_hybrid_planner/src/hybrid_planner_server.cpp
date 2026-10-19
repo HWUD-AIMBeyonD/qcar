@@ -4,6 +4,7 @@
 #include <vector>
 #include <chrono>
 #include <algorithm>
+#include <cmath>
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -13,6 +14,7 @@
 #include "tf2_ros/transform_listener.h"
 #include "custom_hybrid_planner/hybrid_planner.hpp"
 #include "nav2_msgs/msg/path.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
 
 using std::placeholders::_1;
 using std::placeholders::_2;
@@ -61,6 +63,8 @@ public:
         // The action result is the only other place the path goes; /plan is
         // what RViz and compute_kpis_hw.py read (navfn_planner published it).
         plan_pub_ = create_publisher<nav_msgs::msg::Path>("/plan", 1);
+        // Per-plan timing: [plan_ms, success(1/0), path_length_m, num_poses]
+        timing_pub_ = create_publisher<std_msgs::msg::Float64MultiArray>("/planner_timing", 10);
 
         // 6. Create Action Server only after all dependencies are active
         action_server_ = rclcpp_action::create_server<Action>(
@@ -129,6 +133,8 @@ private:
             path = planner_->createPlan(start, goal->pose);
         } catch (const std::exception & e) {
             RCLCPP_ERROR(get_logger(), "Planner Logic Exception: %s", e.what());
+            publishTiming(std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - t0).count(), false, nav_msgs::msg::Path());
             goal_handle->abort(result);
             return;
         }
@@ -138,6 +144,7 @@ private:
         // 3. Check for empty path (failure to find a route)
         if(path.poses.empty()) {
              RCLCPP_WARN(get_logger(), "Planner could not find a valid path (%.1f ms).", plan_ms);
+             publishTiming(plan_ms, false, path);
              goal_handle->abort(result);
              return;
         }
@@ -150,8 +157,23 @@ private:
         }
 
         plan_pub_->publish(path);
+        publishTiming(plan_ms, true, path);
         goal_handle->succeed(result);
         RCLCPP_INFO(get_logger(), "Path successfully sent to BT Navigator.");
+    }
+
+    void publishTiming(double plan_ms, bool success, const nav_msgs::msg::Path & path)
+    {
+        double length = 0.0;
+        for (size_t i = 1; i < path.poses.size(); ++i) {
+            length += std::hypot(
+                path.poses[i].pose.position.x - path.poses[i - 1].pose.position.x,
+                path.poses[i].pose.position.y - path.poses[i - 1].pose.position.y);
+        }
+        std_msgs::msg::Float64MultiArray timing;
+        timing.data = {plan_ms, success ? 1.0 : 0.0, length,
+            static_cast<double>(path.poses.size())};
+        timing_pub_->publish(timing);
     }
 
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -161,6 +183,7 @@ private:
     std::shared_ptr<custom_hybrid_planner::HybridPlanner> planner_;
     typename rclcpp_action::Server<Action>::SharedPtr action_server_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr plan_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr timing_pub_;
 };
 
 int main(int argc, char ** argv)

@@ -44,6 +44,12 @@ void VectorPursuitController::configure(
   RCLCPP_INFO(node->get_logger(),
     "Vector Pursuit configured: dist=%.2f, k_trans=%.2f, k_rot=%.2f",
     lookahead_dist_, k_trans_, k_rot_);
+  RCLCPP_INFO(node->get_logger(),
+    "Loaded params: %s.desired_linear_vel=%.3f %s.max_angular_vel=%.3f %s.lookahead_dist=%.3f "
+    "%s.k_trans=%.3f %s.k_rot=%.3f %s.wheelbase=%.3f",
+    plugin_name_.c_str(), desired_linear_vel_, plugin_name_.c_str(), max_angular_vel_,
+    plugin_name_.c_str(), lookahead_dist_, plugin_name_.c_str(), k_trans_,
+    plugin_name_.c_str(), k_rot_, plugin_name_.c_str(), wheelbase_);
 }
 
 void VectorPursuitController::activate() 

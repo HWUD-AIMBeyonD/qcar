@@ -38,6 +38,11 @@ void StanleyController::configure(
   RCLCPP_INFO(node->get_logger(),
     "Stanley Controller configured: desired_vel=%.2f, k_gain=%.2f, wheelbase=%.3f",
     desired_linear_vel_, k_gain_, wheelbase_);
+  RCLCPP_INFO(node->get_logger(),
+    "Loaded params: %s.desired_linear_vel=%.3f %s.max_angular_vel=%.3f %s.k_gain=%.3f "
+    "%s.wheelbase=%.3f",
+    plugin_name_.c_str(), desired_linear_vel_, plugin_name_.c_str(), max_angular_vel_,
+    plugin_name_.c_str(), k_gain_, plugin_name_.c_str(), wheelbase_);
 }
 
 void StanleyController::activate() 

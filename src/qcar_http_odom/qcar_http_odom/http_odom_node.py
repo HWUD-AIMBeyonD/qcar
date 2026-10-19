@@ -1,5 +1,6 @@
 import json
 import math
+import time
 import urllib.error
 import urllib.request
 
@@ -9,6 +10,7 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import TransformStamped
+from std_msgs.msg import Float64MultiArray
 # no tf2_ros python on the QCar's Dashing install -- publish TFMessage on /tf
 # by hand, the same way qcar_odom/simple_ekf and qcar_amcl do
 from tf2_msgs.msg import TFMessage
@@ -68,6 +70,9 @@ class HttpOdomNode(Node):
         )
 
         self.odom_pub = self.create_publisher(Odometry, '/odom_opti', qos)
+        # per-poll [fetch_ms, ok(1/0)] for latency benchmarking
+        self.stats_pub = self.create_publisher(
+            Float64MultiArray, '/odom_opti_stats', qos)
 
         if self.publish_tf:
             self.tf_pub_reliable = self.create_publisher(
@@ -116,7 +121,12 @@ class HttpOdomNode(Node):
             return None
 
     def poll_cb(self):
+        t0 = time.monotonic()
         sample = self.fetch_pose()
+        stats = Float64MultiArray()
+        stats.data = [(time.monotonic() - t0) * 1000.0,
+                      0.0 if sample is None else 1.0]
+        self.stats_pub.publish(stats)
         if sample is None:
             return
 

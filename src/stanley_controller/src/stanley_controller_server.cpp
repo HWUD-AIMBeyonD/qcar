@@ -3,6 +3,7 @@
 #include <thread>
 #include <vector>
 #include <cmath>
+#include <chrono>
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -12,6 +13,7 @@
 #include "tf2_ros/transform_listener.h"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
 #include "stanley_controller/stanley_controller.hpp" 
 
 using std::placeholders::_1;
@@ -65,6 +67,8 @@ public:
 
     // Publisher
     vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 1);
+    // Per-iteration timing: [pose_lookup_ms, compute_ms, loop_period_ms, pose_age_ms]
+    timing_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("/controller_timing", 10);
   }
 
   void setup() 
@@ -131,8 +135,15 @@ private:
     controller_->setPlan(standard_path);
 
     rclcpp::Rate loop_rate(20); 
+    bool have_last_iter = false;
+    std::chrono::steady_clock::time_point last_iter;
 
     while (rclcpp::ok()) {
+      const auto iter_start = std::chrono::steady_clock::now();
+      const double loop_period_ms = have_last_iter ? msBetween(last_iter, iter_start) : -1.0;
+      last_iter = iter_start;
+      have_last_iter = true;
+
       if (goal_handle->is_canceling()) {
         stopRobot();
         goal_handle->canceled(result);
@@ -140,7 +151,10 @@ private:
       }
 
       geometry_msgs::msg::PoseStamped robot_pose;
-      if(!costmap_ros_->getRobotPose(robot_pose)) {
+      const auto pose_start = std::chrono::steady_clock::now();
+      const bool got_pose = costmap_ros_->getRobotPose(robot_pose);
+      const double pose_lookup_ms = msBetween(pose_start, std::chrono::steady_clock::now());
+      if(!got_pose) {
           RCLCPP_WARN(get_logger(), "Could not get robot pose");
           continue;
       }
@@ -154,6 +168,7 @@ private:
 
       geometry_msgs::msg::Twist current_vel; 
       geometry_msgs::msg::TwistStamped cmd_stamped;
+      const auto compute_start = std::chrono::steady_clock::now();
       try {
         cmd_stamped = controller_->computeVelocityCommands(robot_pose, current_vel);
       } catch (const std::exception & e) {
@@ -163,10 +178,28 @@ private:
         return;
       }
 
+      const double compute_ms = msBetween(compute_start, std::chrono::steady_clock::now());
+
       vel_pub_->publish(cmd_stamped.twist);
+
+      double pose_age_ms = -1.0;
+      if (robot_pose.header.stamp.sec != 0 || robot_pose.header.stamp.nanosec != 0) {
+        pose_age_ms = (this->now().nanoseconds() -
+          rclcpp::Time(robot_pose.header.stamp).nanoseconds()) / 1e6;
+      }
+      std_msgs::msg::Float64MultiArray timing;
+      timing.data = {pose_lookup_ms, compute_ms, loop_period_ms, pose_age_ms};
+      timing_pub_->publish(timing);
       goal_handle->publish_feedback(feedback);
       loop_rate.sleep();
     }
+  }
+
+  static double msBetween(
+    const std::chrono::steady_clock::time_point & a,
+    const std::chrono::steady_clock::time_point & b)
+  {
+    return std::chrono::duration<double, std::milli>(b - a).count();
   }
 
   void stopRobot() {
@@ -189,6 +222,7 @@ private:
   std::shared_ptr<stanley_controller::StanleyController> controller_;
   rclcpp_action::Server<Action>::SharedPtr action_server_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr vel_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr timing_pub_;
 };
 
 int main(int argc, char ** argv)
