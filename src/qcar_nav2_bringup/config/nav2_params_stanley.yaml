@@ -83,7 +83,7 @@ controller_server:
     min_theta_velocity_threshold: 0.001
 
     FollowPath:
-      desired_linear_vel: 0.3   # matches nav2_params_rpp.yaml for fair comparison
+      desired_linear_vel: 0.35   # matches nav2_params_rpp.yaml for fair comparison
       max_angular_vel: 0.5    
       k_gain: 0.8             
       wheelbase: 0.256        
