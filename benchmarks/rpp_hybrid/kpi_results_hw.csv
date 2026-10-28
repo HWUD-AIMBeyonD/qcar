@@ -1,4 +1,2 @@
 controller,planner,run,cte_rmse,cte_max,mission_time,linear_accel_rms,angular_accel_rms,path_efficiency
-rpp,hybrid,3,0.0331,0.1064,16.05,0.5767,0.5319,1.0247
-rpp,hybrid,4,0.0586,0.1165,16.10,0.5705,0.3790,1.0377
-rpp,hybrid,5,0.0679,0.1406,15.25,0.5530,0.3848,1.0385
+rpp,hybrid,2,0.3897,1.2141,19.60,0.5219,0.4957,1.1720

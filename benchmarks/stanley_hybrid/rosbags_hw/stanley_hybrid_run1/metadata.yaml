@@ -4,31 +4,31 @@ rosbag2_bagfile_information:
   relative_file_paths:
     - stanley_hybrid_run1.db3
   duration:
-    nanoseconds: 70866567700
+    nanoseconds: 77800233057
   starting_time:
-    nanoseconds_since_epoch: 1792416683808197595
-  message_count: 8041
+    nanoseconds_since_epoch: 1793174755531650550
+  message_count: 5818
   topics_with_message_count:
     - topic_metadata:
         name: /cmd_vel
         type: geometry_msgs/msg/Twist
         serialization_format: cdr
-      message_count: 744
+      message_count: 513
     - topic_metadata:
         name: /controller_timing
         type: std_msgs/msg/Float64MultiArray
         serialization_format: cdr
-      message_count: 743
+      message_count: 512
     - topic_metadata:
         name: /odom_opti
         type: nav_msgs/msg/Odometry
         serialization_format: cdr
-      message_count: 3209
+      message_count: 2310
     - topic_metadata:
         name: /odom_opti_stats
         type: std_msgs/msg/Float64MultiArray
         serialization_format: cdr
-      message_count: 3194
+      message_count: 2316
     - topic_metadata:
         name: /plan
         type: nav_msgs/msg/Path
@@ -43,9 +43,9 @@ rosbag2_bagfile_information:
         name: /rosout
         type: rcl_interfaces/msg/Log
         serialization_format: cdr
-      message_count: 6
+      message_count: 11
     - topic_metadata:
         name: /system_stats
         type: std_msgs/msg/String
         serialization_format: cdr
-      message_count: 143
+      message_count: 154

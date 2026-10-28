@@ -95,7 +95,7 @@ controller_server:
     min_theta_velocity_threshold: 0.001
 
     FollowPath:
-      desired_linear_vel: 0.4
+      desired_linear_vel: 0.35
       lookahead_dist: 0.6            
       min_lookahead_dist: 0.30        
       max_lookahead_dist: 0.90        

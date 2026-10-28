@@ -4,31 +4,31 @@ rosbag2_bagfile_information:
   relative_file_paths:
     - rpp_hybrid_run2.db3
   duration:
-    nanoseconds: 30666437630
+    nanoseconds: 105392895319
   starting_time:
-    nanoseconds_since_epoch: 1792415521919199135
-  message_count: 3577
+    nanoseconds_since_epoch: 1793168950495259755
+  message_count: 4860
   topics_with_message_count:
     - topic_metadata:
         name: /cmd_vel
         type: geometry_msgs/msg/Twist
         serialization_format: cdr
-      message_count: 258
+      message_count: 394
     - topic_metadata:
         name: /controller_timing
         type: std_msgs/msg/Float64MultiArray
         serialization_format: cdr
-      message_count: 257
+      message_count: 393
     - topic_metadata:
         name: /odom_opti
         type: nav_msgs/msg/Odometry
         serialization_format: cdr
-      message_count: 1496
+      message_count: 1796
     - topic_metadata:
         name: /odom_opti_stats
         type: std_msgs/msg/Float64MultiArray
         serialization_format: cdr
-      message_count: 1496
+      message_count: 2014
     - topic_metadata:
         name: /plan
         type: nav_msgs/msg/Path
@@ -43,9 +43,9 @@ rosbag2_bagfile_information:
         name: /rosout
         type: rcl_interfaces/msg/Log
         serialization_format: cdr
-      message_count: 6
+      message_count: 51
     - topic_metadata:
         name: /system_stats
         type: std_msgs/msg/String
         serialization_format: cdr
-      message_count: 62
+      message_count: 210
