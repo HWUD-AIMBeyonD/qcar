@@ -1,0 +1,14 @@
+# Parameters for scripts/rgbd_camera_node.py (loaded via __params:= by
+# run_qcar_camera.sh). Tuned for recording a rosbag on the Jetson: 640x480
+# JPEG at 15 Hz is ~40-60 kB/frame, vs ~0.9 MB/frame raw. Depth is off --
+# 32FC1 at 1280x720 is 3.7 MB/frame and Foxglove's nav view doesn't need it.
+rgbd_node:
+  ros__parameters:
+    width: 640
+    height: 480
+    publish_rate: 15.0
+    publish_depth: false
+    compress: true
+    jpeg_quality: 80
+    color_frame_id: camera_rgb
+    depth_frame_id: camera_rgb
