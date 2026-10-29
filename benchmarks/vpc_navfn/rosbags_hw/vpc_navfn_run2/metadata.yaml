@@ -1,0 +1,31 @@
+rosbag2_bagfile_information:
+  version: 1
+  storage_identifier: sqlite3
+  relative_file_paths:
+    - vpc_navfn_run2.db3
+  duration:
+    nanoseconds: 44652517856
+  starting_time:
+    nanoseconds_since_epoch: 1793256666371686968
+  message_count: 2192
+  topics_with_message_count:
+    - topic_metadata:
+        name: /cmd_vel
+        type: geometry_msgs/msg/Twist
+        serialization_format: cdr
+      message_count: 770
+    - topic_metadata:
+        name: /odom_opti
+        type: nav_msgs/msg/Odometry
+        serialization_format: cdr
+      message_count: 1415
+    - topic_metadata:
+        name: /plan
+        type: nav_msgs/msg/Path
+        serialization_format: cdr
+      message_count: 1
+    - topic_metadata:
+        name: /rosout
+        type: rcl_interfaces/msg/Log
+        serialization_format: cdr
+      message_count: 6
