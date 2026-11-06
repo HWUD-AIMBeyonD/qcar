@@ -1,0 +1,15 @@
+date:        2026-11-06T06:58:02-05:00
+controller:  stanley
+planner:     hybrid
+run:         1
+uname -r:    4.9.140+
+git HEAD:    79da43991103ead932ac6ba5630b016c47847b44
+git status --porcelain:
+ M src/qcar_nav2_bringup/config/nav2_params_rpp.yaml
+?? benchmarks/
+nvpmodel -q:
+unknown
+jetson_clocks max clocks: unknown
+jetson_clocks --show:
+SOC family:tegra186  Machine:quill
+Error: Run this script(/usr/bin/jetson_clocks) as a root user
